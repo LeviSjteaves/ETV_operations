@@ -10,7 +10,7 @@ import sys
 import osmnx as ox
 import networkx as nx
 import pandas as pd
-import pdb
+import geopandas as gp
 from collections import defaultdict
 
 def LoadAPIdata(date_of_interest, pagelimit):
@@ -60,7 +60,7 @@ def LoadAPIdata(date_of_interest, pagelimit):
     flightdata = []
     for flight in rawflightdata:
         main_flight = flight['mainFlight']
-        if main_flight not in seen_main_flights:
+        if main_flight not in seen_main_flights and flight['publicFlightState'] != {'flightStates': ['CNX']}:
             seen_main_flights.add(main_flight)
             flightdata.append(flight)
             
@@ -70,12 +70,14 @@ def LoadOSMdata(airport_name, runways, operational_gates):
     
     # Load the graph for taxiways and serviceways
     G_taxi = ox.graph_from_place(airport_name,custom_filter = '["aeroway"~"runway|taxiway"]', simplify=True)
+    
+    #G_taxi = ox.consolidate_intersections(G_taxi_t, rebuild_graph=True, tolerance=0.0002, dead_ends=True)
+    
     G_ser = ox.graph_from_place(airport_name,custom_filter = '["highway"~"service"]', simplify=True)
     
     #Create taxi network
     G_data = ox.utils_graph.graph_to_gdfs(G_taxi)
     G_data_nodes , G_data_edges = G_data
-    #ox.plot_graph(G_taxi)
     
     #Create service network
     G_ser_data = ox.utils_graph.graph_to_gdfs(G_ser)
@@ -134,8 +136,8 @@ def LoadOSMdata(airport_name, runways, operational_gates):
     '''
     
     # Plot the graph with highlighted nodes
-    node_colors = {node: 'r' if node in list_runway_nodes else 'g' if node in gate_nodes else 'w' for node in G_taxi.nodes()}
-    fig, ax = ox.plot_graph(G_taxi, node_color=list(node_colors.values()), bgcolor='k', show=True)
+    node_colors = {node: 'r' if node in list_runway_nodes else 'g' if node in gate_nodes else 'k' for node in G_taxi.nodes()}
+    fig, ax = ox.plot_graph(G_taxi, node_color=list(node_colors.values()), bgcolor='w', edge_color = 'k' ,show=True)
     return G_taxi, gates, list_runway_nodes
     
 def Routing(origins, destinations, graph):
@@ -148,8 +150,8 @@ def Routing(origins, destinations, graph):
             route1 = nx.shortest_path(graph, orig, dest, weight='length')
             route1_length = nx.shortest_path_length(graph, orig, dest, weight='length')
             route1_data = ox.utils_graph.route_to_gdf(graph, route1, weight='length')
-            
-            '''# Find the second shortest path
+            '''
+            # Find the second shortest path
             route2 = None
             route2_length = float('inf')
             
@@ -180,25 +182,27 @@ def Routing(origins, destinations, graph):
             #fig, ax = ox.plot_graph_route(graph, route2,  route_color='b' ,route_linewidth=6, node_size=10, bgcolor='k')
 
             # compare the two routes
-            #print('Route 1 is', route1_length, 'meters')
+            print('Route 1 is', route1_length, 'meters')
             #print("Route 2 is", route2_length, 'meters')
 
             # Append the items to the dictionary using a specific key
             route[x] = route1
             x=x+1
+    route = [v for v in route.values()]        
     return route
 
 def Timeplanning(routes, graph):
-    velocity_mps = 1.0  # adjust this according to the agent's speed
+    velocity_mps = 10.0  # adjust this according to the agent's speed
     start_time =0 # 8:00 AM in seconds
     
     # Calculate arrival time at each node in the route
     arrival_times_list = []
-    arrival_times = {}
+    route_times = {}
     current_time = start_time
     
     for i in range(len(routes)):
         route = routes[i]
+        arrival_times_list = []
         for j in range(len(route) - 1):
             node1, node2 = route[j], route[j + 1]
             
@@ -211,9 +215,11 @@ def Timeplanning(routes, graph):
             # Update current time and add it to arrival_times list
             current_time += travel_time
             arrival_times_list.append(current_time)
-        arrival_times[i] = arrival_times_list
+        route_times[i] = arrival_times_list
         current_time = 0
     # arrival_times list now contains the arrival time at each node in the route
-    return arrival_times
+    route_times = [v for v in route_times.values()] 
+    
+    return route_times
 
 
