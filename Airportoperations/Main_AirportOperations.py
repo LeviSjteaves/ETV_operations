@@ -5,7 +5,8 @@ Created on Wed Oct 11 11:51:41 2023
 """
 # Import packages
 import osmnx as ox
-from datetime import datetime, timezone
+from datetime import datetime
+from gurobipy import GRB
 
 #Import API data from schiphhol
 date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
@@ -33,14 +34,18 @@ operational_gates = ['H1' if x is None else x for x in operational_gates]
 from Functions import LoadOSMdata
 [G_taxi, gates, list_runway_nodes ]= LoadOSMdata(airport_name, operational_runways, operational_gates)
 
-origins = [list(G_taxi)[300]]
+
 destination_gate = gates['ref']
 dest_list = ox.distance.nearest_nodes(G_taxi, gates.geometry.x , gates.geometry.y , return_dist=False)
 destinations = dest_list
+orig = list(G_taxi)[300]
+origins = []
+for i in range(len(destinations)):
+    origins.append(orig)
 
 from Functions import Routing
 #for orig, dest in zip(origins, destinations):
-routes = Routing(origins, destinations, G_taxi)
+routes = Routing(orig, destinations, G_taxi)
 
 #Add routes to flightdata list
 for i in range(len(flightdata)):
@@ -63,7 +68,17 @@ for i in range(len(appear_times_T)):
     appear_times.append(int(appear_times_C.timestamp())-int(timestamp_reference.timestamp()))
 
 #optimization
+from Functions import Opt
+model = Opt(G_taxi,appear_times,origins,destinations) 
 
+Dvars_name = []
+Dvars_value = []
+if model.status == GRB.OPTIMAL:   
+    for var in model.getVars():
+        Dvars_name.append(var.varName)
+        Dvars_value.append(var.x)
+else:
+    print("No optimal solution found.")
 
 
 
