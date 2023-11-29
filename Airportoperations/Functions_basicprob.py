@@ -21,6 +21,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a):
     max_speed_a = p['max_speed_a']
     min_speed_a = p['min_speed_a']
     speed_e = p['speed_e']
+    bat_e = p['bat_e']
     g = p['g']
     mu = p['mu']
     m_a = p['m_a']
@@ -107,7 +108,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a):
                
     for a in range(N_aircraft):
        for i in range(N_etvs):           
-              E[i, a] = model.addVar(lb=0, vtype=GRB.CONTINUOUS, name=f"E_{i}_{a}") 
+              E[i, a] = model.addVar(lb=0, vtype=GRB.INTEGER, name=f"E_{i}_{a}") 
               
     for a in range(N_aircraft):
        for i in range(N_etvs):          
@@ -117,8 +118,8 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a):
     model.setObjective(grp.quicksum(mu*m_a*g*d_a[a]*eta*(1-sum(X[a,i] for i in range(N_etvs))) for a in range(N_aircraft)) 
                        +grp.quicksum(t[a, n] for a in range(N_aircraft) for n in range(1, len(P[a])))
                        , sense=GRB.MINIMIZE)
-                      #-grp.quicksum(O[a, b, 0] for a in range(N_aircraft) for b in range(N_etvs))*100000 
-    # Constraints
+                   #-grp.quicksum(E[i,a] for i in range(N_etvs) for a in range(N_aircraft))   
+    # Constraints////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     for a in range(N_aircraft):
         #Min start time
         model.addConstr(t[a, 0] >= tO_a[a], f"appear_constraint_{a}")
@@ -167,40 +168,22 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a):
                if a!=b:
                   model.addConstr((Y[a,b,i] == 1) >> (t[b,0] >= t[a,len(P[a])-1] + Short_path_dist(G_e, D_a[a], O_a[b]) / speed_e), f"auxiliary_task_{a}_{b}_{i}")   
                   model.addConstr(X[a,i]+X[b,i] <= 1 + Y[a,b,i] + Y[b,a,i], f"available_etv_constraint_{a}_{b}_{i}")
-                  
-    #Ordering of tasks
-    for a in range(N_aircraft):
-        for b in range(N_aircraft):
-            for i in range(N_etvs):
-                if a!=b:
-                    #model.addConstr((O[a,b,i] == 1) >> (grp.quicksum(O[a,k,i] for k in range(N_aircraft)) == grp.quicksum(O[b,k,i] for k in range(N_aircraft))+1))
-                    #model.addConstr(O[a,b,i] >= grp.quicksum(Y[a, k, i] for k in range(N_aircraft)) - grp.quicksum(Y[b, k, i] for k in range(N_aircraft)))
-                    
-                    #M = N_aircraft
-                    #model.addConstr(grp.quicksum(Y[a, k, i] for k in range(N_aircraft)) - grp.quicksum(Y[b, k, i] for k in range(N_aircraft)) <= 1+ M * (1 - O[a, b, i]))
-                    #model.addConstr(grp.quicksum(Y[a, k, i] for k in range(N_aircraft)) - grp.quicksum(Y[b, k, i] for k in range(N_aircraft)) <= M * (1 - O[a, b, i]))
-                    
-                    #model.addConstr((X[a,i] == 0) >> (O[a, b, i] <= 0))
-                    #model.addConstr((X[b,i] == 0) >> (O[a, b, i] <= 0))
-                    e=1
-                    #model.addConstr(grp.quicksum(O[r, k, i] for r in range(N_aircraft) for k in range(N_aircraft)) <= grp.quicksum(X[a, i] for a in range(N_aircraft)))
-                    #model.addConstr(grp.quicksum(O[k, b, i] for k in range(N_aircraft)) <= 1)
-                    #model.addConstr(grp.quicksum(O[a, k, i] for k in range(N_aircraft)) <= 1)
-                    
-                    
+                                                 
     # ETV energy consumption
-    for a in range(N_aircraft-1):
-        for b in range(1,N_aircraft):
-            for i in range(N_etvs): 
-                model.addConstr(E[i, 0] == 100000,  f"full_charge_at_start_{i}_{a}")
-                model.addConstr(C[i,N_aircraft-1] == 1,  f"last_charge_{i}_{a}")
+    for i in range(N_etvs): 
+        for a in range(N_aircraft-1):
+            model.addConstr(E[i, a] <=  bat_e,  f"full_charge_at_start_{i}_{a}")
+            model.addConstr(C[i,N_aircraft-1] == 1,  f"last_charge_{i}_{a}")
+            for b in range(1,N_aircraft): 
                 if a!=b:
-                    #model.addConstr((C[i,a] == 1) >> (E[i, b] <= E[i, a]-(mu*m_a*g*d_a[a]*eta*+short_path_dist(G_e, D_a[a], O_a[b])*(1)-((t[a,0]-t[b,len(P[b])-1])*100))+(1-O[a,b,i])*1000000), f"available_etv_constraint1_{a}_{b}_{i}")   
-                    #model.addConstr((C[i,a] == 1) >> (E[i, b] >= E[i, a]-(O[a,b,i])*1000000), f"available_etv_constraint1_{a}_{b}_{i}")   
-                    #model.addConstr((C[i,a] == 0) >> (E[i, b] <= E[i, a]-(mu*m_a*g*d_a[a]*eta*+short_path_dist(G_e, D_a[a], O_a[b])*(1))+(1-O[a,b,i])*1000000), f"available_etv_constraint2_{a}_{b}_{i}")   
-                    #model.addConstr((C[i,a] == 0) >> (E[i, b] >= E[i, a]-(O[a,b,i])*1000000), f"available_etv_constraint2_{a}_{b}_{i}")   
-                    e=1
-    
+                    model.addConstr((C[i,a] == 1) >> (E[i, b] <= E[i, a]-(mu*m_a*g*d_a[a]*eta+Short_path_dist(G_e, D_a[a], O_a[b])*(1)-((t[a,0]-t[b,len(P[b])-1])*100000))+(1-O[a,b,i])* bat_e), f"available_etv_constraint1_{a}_{b}_{i}")   
+                    model.addConstr((C[i,a] == 0) >> (E[i, b] <= E[i, a]-(mu*m_a*g*d_a[a]*eta+Short_path_dist(G_e, D_a[a], O_a[b])*(1))+(1-O[a,b,i])* bat_e), f"available_etv_constraint2_{a}_{b}_{i}")   
+      
+     # ETV energy availability
+    for i in range(N_etvs): 
+        for a in range(N_aircraft):
+             model.addConstr((X[a,i] == 1) >> (E[i, a] >= mu*m_a*g*d_a[a]*eta))
+      
     model.update()
     return model
 
@@ -228,15 +211,14 @@ def Plotting(variable_values, N_aircraft, N_etvs, P):
     # Iterate through aircraft and tasks to plot horizontal bars
     for a in range(N_aircraft): 
             start_time = variable_values['t'][a][0]
-            duration = variable_values['t'][a][3] - start_time
+            duration = variable_values['t'][a][len(P[a])-1] - start_time
             
             ax.barh(a, duration, left=start_time, color=etv_color[a])
-    
-    
+
             for n in range(len(variable_values['t'][a])):
                 node_number= P[a][n]
                 ax.text(variable_values['t'][a][n], a, str(node_number), color='black',
-                    ha='center', va='center', fontweight='bold')
+                    ha='center', va='center', fontweight='bold', fontsize= 7)
 
     # Set labels and title
     ax.set_xlabel('Time')
