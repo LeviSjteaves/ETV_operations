@@ -144,7 +144,18 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a):
     for n in range(len(I_col_ot_nodes)):  
         idx_aircraftpairs = [i for i, sublist in enumerate(I_col) if sublist == I_col_ot[n]]
         model.addConstr(Z[idx_aircraftpairs[0]]-Z[idx_aircraftpairs[1]] == 0, f"collision_overtake_node_{n}")
-    
+        #model.addConstr(Z[idx_aircraftpairs[0]]+Z[idx_aircraftpairs[1]] == 1, f"collision_overtake_node_{n}")
+                
+                        
+    # ETV constraints availability due to towing other tasks
+    for i in range(N_etvs):
+        for a in range(N_aircraft):
+          for b in range(N_aircraft):
+               if a!=b:
+                  #model.addConstr((Y[a,b,i] == 1) >> (t[b,0] >= t[a,len(P[a])-1] + Short_path_dist(G_e, D_a[a], O_a[b]) / speed_e), f"auxiliary_task_{a}_{b}_{i}")   
+                  #model.addConstr((Y[a,b,i] == 1) >> (X[a,i]+X[b,i] == 2))  
+                  #model.addConstr(X[a,i]+X[b,i] <= 1 + Y[a,b,i] + Y[b,a,i], f"available_etv_constraint_{a}_{b}_{i}")
+                  e=1
     #Ordering of tasks
     for i in range(N_etvs):
         model.addConstr(grp.quicksum(X[k,i] for k in range(N_aircraft)) == 1+ grp.quicksum(O[k,l,i] for k in range(N_aircraft) for l in range(N_aircraft)), f"available_etv_constraint_{a}_{b}_{i}")
@@ -152,38 +163,27 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a):
             model.addConstr(grp.quicksum(O[k, a, i] for k in range(N_aircraft)) <= 1)
             model.addConstr(grp.quicksum(O[a, k, i] for k in range(N_aircraft)) <= 1)
             for b in range(N_aircraft):
-                if a<=b:
+                if a!=b:
                     model.addConstr((O[a,b,i] == 1) >> (t[b,0] >= t[a,len(P[a])-1] + Short_path_dist(G_e, D_a[a], O_a[b]) / speed_e), f"auxiliary_task_{a}_{b}_{i}")   
-                    model.addConstr((O[a,b,i] == 1) >> (X[a,i]+X[b,i] == 2))
-                if a>=b:     
-                    model.addConstr((O[a,b,i] == 1) >> (t[b,0] >= t[a,len(P[a])-1] + Short_path_dist(G_e, D_a[a], O_a[b]) / speed_e), f"auxiliary_task_{a}_{b}_{i}")   
-                    model.addConstr((O[a,b,i] == 1) >> (X[a,i]+X[b,i] == 2))
+                    model.addConstr((O[a,b,i] == 1) >> (X[a,i]+X[b,i] == 2))  
                 if a == b:  
-                    model.addConstr(O[a,b,i] == 0) 
-                   
-    # ETV constraints availability due to towing other tasks
-    for i in range(N_etvs):
-        for a in range(N_aircraft):
-          for b in range(N_aircraft):
-               if a!=b:
-                  model.addConstr((Y[a,b,i] == 1) >> (t[b,0] >= t[a,len(P[a])-1] + Short_path_dist(G_e, D_a[a], O_a[b]) / speed_e), f"auxiliary_task_{a}_{b}_{i}")   
-                  model.addConstr(X[a,i]+X[b,i] <= 1 + Y[a,b,i] + Y[b,a,i], f"available_etv_constraint_{a}_{b}_{i}")
-                                                 
+                    model.addConstr(O[a,b,i] == 0)
+                                          
     # ETV energy consumption
     for i in range(N_etvs): 
-        for a in range(N_aircraft-1):
-            model.addConstr(E[i, a] <=  bat_e,  f"full_charge_at_start_{i}_{a}")
-            model.addConstr(C[i,N_aircraft-1] == 1,  f"last_charge_{i}_{a}")
-            for b in range(1,N_aircraft): 
+        for a in range(N_aircraft):
+            for b in range(N_aircraft): 
                 if a!=b:
-                    model.addConstr((C[i,a] == 1) >> (E[i, b] <= E[i, a]-(mu*m_a*g*d_a[a]*eta+Short_path_dist(G_e, D_a[a], O_a[b])*(1)-((t[a,0]-t[b,len(P[b])-1])*100000))+(1-O[a,b,i])* bat_e), f"available_etv_constraint1_{a}_{b}_{i}")   
-                    model.addConstr((C[i,a] == 0) >> (E[i, b] <= E[i, a]-(mu*m_a*g*d_a[a]*eta+Short_path_dist(G_e, D_a[a], O_a[b])*(1))+(1-O[a,b,i])* bat_e), f"available_etv_constraint2_{a}_{b}_{i}")   
-      
+                    model.addConstr((C[i,a] == 1) >> (E[i, b] <= E[i, a]-(mu*m_a*g*d_a[a]*eta+Short_path_dist(G_e, D_a[a], O_a[b])*(100)-((t[b,0]-t[a,len(P[a])-1])*5000))+(1-O[a,b,i])*bat_e), f"available_etv_constraint1_{a}_{b}_{i}")   
+                    model.addConstr((C[i,a] == 0) >> (E[i, b] <= E[i, a]-(mu*m_a*g*d_a[a]*eta+Short_path_dist(G_e, D_a[a], O_a[b])*(100))+(1-O[a,b,i])*bat_e), f"available_etv_constraint2_{a}_{b}_{i}")   
+                                                                      
      # ETV energy availability
     for i in range(N_etvs): 
         for a in range(N_aircraft):
-             model.addConstr((X[a,i] == 1) >> (E[i, a] >= mu*m_a*g*d_a[a]*eta))
-      
+            model.addConstr(E[i, a] <=  bat_e,  f"max_cap_{i}_{a}")
+            model.addConstr((X[a,i] == 1) >> (E[i, a] >= (mu*m_a*g*d_a[a]*eta+Short_path_dist(G_e, D_a[a], O_a[b])*(100))))
+            #model.addConstr(((X[a,i] == 0) >> (C[i,a] == 0 )),  f"last_charge_{i}_{a}")
+            
     model.update()
     return model
 
@@ -219,7 +219,16 @@ def Plotting(variable_values, N_aircraft, N_etvs, P):
                 node_number= P[a][n]
                 ax.text(variable_values['t'][a][n], a, str(node_number), color='black',
                     ha='center', va='center', fontweight='bold', fontsize= 7)
-
+                for i in range(len(variable_values['C'])):
+                    if variable_values['C'][i][a] == 1:
+                        ax.text(variable_values['t'][a][len(P[a])-1], a, str('C'), color='green',
+                            ha='center', va='center', fontweight='bold', fontsize= 12)
+                    for b in range(N_aircraft): 
+                        if variable_values['O'][a][b][i] == 1:
+                            ax.text(variable_values['t'][b][0], b+0.5, variable_values['E'][i][b], color='black',
+                                ha='center', va='center', fontweight='normal', fontsize= 7)  
+                            
+                            
     # Set labels and title
     ax.set_xlabel('Time')
     ax.set_ylabel('Aircraft Task')

@@ -12,6 +12,7 @@ import networkx as nx
 import pandas as pd
 import geopandas as gp
 import gurobipy as grp
+from datetime import datetime
 from gurobipy import GRB
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
@@ -126,22 +127,18 @@ def LoadOSMdata(airport_name, runways, operational_gates):
     # Apply the filter to the GeoDataFrame
     runway_nodes = G_data_edges[filter_condition]
     list_runway_nodes = runway_nodes.index.get_level_values('u').to_list()
-    list_runway_gate_nodes = list_runway_nodes+gate_nodes
-    
-    '''
-    # Remove nodes from the graph
-    G_remove = ox.graph_from_bbox(52.3123, 52.3068, 4.7722, 4.7438,custom_filter = '["aeroway"~"runway|taxiway"]', simplify=False)
-    remove_nodes = set(G_remove.nodes())
-    remove_edges = set(G_remove.edges())
-    G_taxi.remove_nodes_from(remove_nodes)
-    G_taxi.remove_edges_from(remove_edges)
-    ox.plot_graph(G_taxi)
-    '''
-    
     # Plot the graph with highlighted nodes
     node_colors = {node: 'r' if node in list_runway_nodes else 'g' if node in gate_nodes else 'k' for node in G_taxi.nodes()}
+
+
+    node_nr_id = {node: i for i, node in enumerate(G_taxi.nodes())}
+    node_x = G_taxi.nodes('x')
+    node_y = G_taxi.nodes('y')
+    
+
+
     fig, ax = ox.plot_graph(G_taxi, node_color=list(node_colors.values()), bgcolor='w', edge_color = 'k' ,show=True)
-    return G_taxi, gates, list_runway_nodes
+    return G_taxi, gates, list_runway_nodes, node_mapping
     
 def Routing(origins, destinations, graph):
     route = {}
@@ -225,6 +222,33 @@ def Timeplanning(routes, graph):
     route_times = [v for v in route_times.values()] 
     
     return route_times
+
+def init_routes(flightdata, routes, orig, destinations, G_taxi):
+    from Functions import Routing
+    #for orig, dest in zip(origins, destinations):
+    routes = Routing(orig, destinations, G_taxi)
+
+    #Add routes to flightdata list
+    for i in range(len(flightdata)):
+        flightdata[i]['Plane_route'] = routes[i]
+
+    fig, ax = ox.plot_graph_route(G_taxi, route=routes[0] ,  route_color='b' ,route_linewidth=6, node_size=10, bgcolor='k')
+
+    from Functions import Timeplanning
+    route_times = Timeplanning(routes, G_taxi)
+    return route_times
+
+def appeartimes(appear_times_T, date_of_interest):
+    timestamp_format1 = "%Y-%m-%dT%H:%M:%S.%f%z"
+    timestamp_format2 = "%Y-%m-%d"
+
+    # Parse the timestamp string into a datetime object
+    appear_times = []
+    for i in range(len(appear_times_T)):
+        appear_times_C = datetime.strptime(appear_times_T[i], timestamp_format1)
+        timestamp_reference = datetime.strptime(date_of_interest, timestamp_format2)
+        appear_times.append(int(appear_times_C.timestamp())-int(timestamp_reference.timestamp()))
+    return appear_times
 
 def create_model(G_a, G_e, N_aircraft, P, d_a, N_etvs, max_speed_a, min_speed_a, speed_e, t_min, t_max, O_a, D_a, tO_a, mu, m_a, eta):
     model = grp.Model("Aircraft_Taxiing")

@@ -16,15 +16,14 @@ from Functions_basicprob import Short_path_dist
 from Functions_basicprob import Plotting
 
 # Load CSV file with EHEH edges
-edges_EHEH_a_mat = pd.read_csv('EHEH_a.csv')
-G_EHEH_a = nx.from_pandas_edgelist(edges_EHEH_a_mat, 'EndNodes_1', 'EndNodes_2', edge_attr='Weight', create_using=nx.Graph)
-edges_EHEH_e_mat = pd.read_csv('EHEH_e.csv')
-G_EHEH_e = nx.from_pandas_edgelist(edges_EHEH_e_mat, 'EndNodes_1', 'EndNodes_2', create_using=nx.Graph)
+edges_EHEH_a_df = pd.read_csv('EHEH_a.csv')
+G_EHEH_a = nx.from_pandas_edgelist(edges_EHEH_a_df, 'EndNodes_1', 'EndNodes_2', edge_attr='Weight', create_using=nx.Graph)
+edges_EHEH_e_df = pd.read_csv('EHEH_e.csv')
+G_EHEH_e = nx.from_pandas_edgelist(edges_EHEH_e_df, 'EndNodes_1', 'EndNodes_2', create_using=nx.Graph)
 
 nodes_EHEH_a_mat = pd.read_csv('EHEH_nodes_a.csv')
 node_positions = {node_id+1: [float(x), float(y)] for node_id, (x, y) in nodes_EHEH_a_mat[['x', 'y']].iterrows()}
 nx.draw(G_EHEH_a, pos=node_positions, with_labels=True, node_size= 25, font_size= 7)
-mplcursors.cursor(hover=True)
 
 # Show the plot inline
 plt.show()
@@ -37,27 +36,27 @@ G_basic_e.add_edges_from([(0, 1,{'weight': 20}), (1, 5,{'weight': 20}), (5, 4,{'
 p = {}
 
 # Graph
-G_a = G_EHEH_a
-G_e = G_EHEH_e
+G_a = G_basic_a
+G_e = G_basic_e
 
 g=9.81
 
 # Aircraft info
 max_speed_a = 1      # Max aircraft velocity
 min_speed_a = 0.1    # Min aircraft velocity
-O_a = [56, 56, 56, 56, 1, 5, 9, 13]   # Origins
-D_a = [1, 5, 9, 13, 57, 57, 57, 57]   # Destinations
+O_a = [4, 4, 4, 4, 4, 4, 9, 13]   # Origins
+D_a = [0, 0, 0, 0, 0, 0, 57, 57]   # Destinations
 tO_a = [0, 0, 0, 0, 0, 0, 0, 0]  # Appearing times
-N_aircraft = 5# Number of aircraft
+N_aircraft = 6# Number of aircraft
 #N_aircraft = len(O_a)# Number of aircraft
 mu = 0.02            # Rolling resistance
 m_a = 40000          # Airplane mass
 eta = 0.3            # Turbine efficiency
 
 # ETV info
-N_etvs = 2        # Number of ETVs
+N_etvs = 2      # Number of ETVs
 speed_e = 3         # ETV velocity
-bat_e = 1000000      #battery capacity
+bat_e = 500000      #battery capacity
 
 #pack p
 p['N_aircraft'] = N_aircraft

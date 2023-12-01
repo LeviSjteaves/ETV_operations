@@ -5,7 +5,6 @@ Created on Wed Oct 11 11:51:41 2023
 """
 # Import packages
 import osmnx as ox
-from datetime import datetime
 from gurobipy import GRB
 
 #Import API data from schiphhol
@@ -32,7 +31,7 @@ operational_gates = ['H1' if x is None else x for x in operational_gates]
 
 
 from Functions import LoadOSMdata
-[G_taxi, gates, list_runway_nodes ]= LoadOSMdata(airport_name, operational_runways, operational_gates)
+[G_taxi, gates, list_runway_nodes, node_mapping ]= LoadOSMdata(airport_name, operational_runways, operational_gates)
 
 
 destination_gate = gates['ref']
@@ -43,29 +42,8 @@ origins = []
 for i in range(len(destinations)):
     origins.append(orig)
 
-from Functions import Routing
-#for orig, dest in zip(origins, destinations):
-routes = Routing(orig, destinations, G_taxi)
-
-#Add routes to flightdata list
-for i in range(len(flightdata)):
-    flightdata[i]['Plane_route'] = routes[i]
-
-fig, ax = ox.plot_graph_route(G_taxi, route=routes[0] ,  route_color='b' ,route_linewidth=6, node_size=10, bgcolor='k')
-
-from Functions import Timeplanning
-route_times = Timeplanning(routes, G_taxi)
-
-
-timestamp_format1 = "%Y-%m-%dT%H:%M:%S.%f%z"
-timestamp_format2 = "%Y-%m-%d"
-
-# Parse the timestamp string into a datetime object
-appear_times = []
-for i in range(len(appear_times_T)):
-    appear_times_C = datetime.strptime(appear_times_T[i], timestamp_format1)
-    timestamp_reference = datetime.strptime(date_of_interest, timestamp_format2)
-    appear_times.append(int(appear_times_C.timestamp())-int(timestamp_reference.timestamp()))
+from Functions import appeartimes
+appear_times = appeartimes(appear_times_T, date_of_interest)
 
 #optimization
 from Functions import Opt
