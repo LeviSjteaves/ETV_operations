@@ -47,14 +47,14 @@ min_speed_a = 0.1    # Min aircraft velocity
 O_a = [4, 4, 4, 4, 4, 4, 9, 13]   # Origins
 D_a = [0, 0, 0, 0, 0, 0, 57, 57]   # Destinations
 tO_a = [0, 0, 0, 0, 0, 0, 0, 0]  # Appearing times
-N_aircraft = 3# Number of aircraft
+N_aircraft = 6# Number of aircraft
 #N_aircraft = len(O_a)# Number of aircraft
 mu = 0.02            # Rolling resistance
 m_a = 40000          # Airplane mass
 eta = 0.3            # Turbine efficiency
 
 # ETV info
-N_etvs = 1      # Number of ETVs
+N_etvs = 2      # Number of ETVs
 speed_e = 3         # ETV velocity
 bat_e = 500000      #battery capacity
 
