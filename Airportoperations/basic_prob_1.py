@@ -56,7 +56,7 @@ eta = 0.3            # Turbine efficiency
 # ETV info
 N_etvs = 2      # Number of ETVs
 speed_e = 3         # ETV velocity
-bat_e = 500000      #battery capacity
+bat_e = 150000      #battery capacity
 
 #pack p
 p['N_aircraft'] = N_aircraft
