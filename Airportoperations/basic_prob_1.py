@@ -44,19 +44,20 @@ g=9.81
 # Aircraft info
 max_speed_a = 1      # Max aircraft velocity
 min_speed_a = 0.1    # Min aircraft velocity
-O_a = [4, 4, 4, 4, 4, 4, 9, 13]   # Origins
-D_a = [0, 0, 0, 0, 0, 0, 57, 57]   # Destinations
+O_a = [4, 4, 4, 4, 4, 4, 4, 4]   # Origins
+D_a = [0, 0, 0, 0, 0, 0, 0, 0]   # Destinations
 tO_a = [0, 0, 0, 0, 0, 0, 0, 0]  # Appearing times
-N_aircraft = 6# Number of aircraft
-#N_aircraft = len(O_a)# Number of aircraft
+#N_aircraft = 4# Number of aircraft
+N_aircraft = len(O_a)# Number of aircraft
 mu = 0.02            # Rolling resistance
 m_a = 40000          # Airplane mass
 eta = 0.3            # Turbine efficiency
+dock = [0]           # Node corresponding to charging dock
 
 # ETV info
 N_etvs = 2      # Number of ETVs
 speed_e = 3         # ETV velocity
-bat_e = 150000      #battery capacity
+bat_e = 200000      #battery capacity
 
 #pack p
 p['N_aircraft'] = N_aircraft
@@ -83,7 +84,7 @@ for a in range(N_aircraft):
 
 
 # Create the Gurobi model
-model = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a)
+model = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock)
 
 # Optimize the model
 model.optimize()
@@ -115,9 +116,12 @@ else:
 
 for a in range(N_aircraft):
    for i in range(N_etvs): 
+       if variable_values['X'][a][i] == 1:
+           print(f"{'X'}_{a}_{i}")
        for b in range(N_aircraft):    
             if variable_values['O'][a][b][i] == 1:
                 print(f"{'O'}_{a}_{b}_{i}")
+                
     
 Plotting(variable_values, N_aircraft, N_etvs, P)                 
          
