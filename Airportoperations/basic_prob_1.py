@@ -7,58 +7,67 @@ Created on Fri Nov 17 11:17:48 2023
 
 from gurobipy import GRB
 import networkx as nx
-import pandas as pd
-import mplcursors
-import scipy.io
-import matplotlib.pyplot as plt
 from Functions_basicprob import Create_model
-from Functions_basicprob import Short_path_dist
 from Functions_basicprob import Plotting
+from Functions_basicprob import Load_Graph
+from Functions_basicprob import Load_Aircraft_Info
 
-# Load CSV file with EHEH edges
-edges_EHEH_a_df = pd.read_csv('EHEH_a.csv')
-G_EHEH_a = nx.from_pandas_edgelist(edges_EHEH_a_df, 'EndNodes_1', 'EndNodes_2', edge_attr='Weight', create_using=nx.Graph)
-edges_EHEH_e_df = pd.read_csv('EHEH_e.csv')
-G_EHEH_e = nx.from_pandas_edgelist(edges_EHEH_e_df, 'EndNodes_1', 'EndNodes_2', create_using=nx.Graph)
-
-nodes_EHEH_a_mat = pd.read_csv('EHEH_nodes_a.csv')
-node_positions = {node_id+1: [float(x), float(y)] for node_id, (x, y) in nodes_EHEH_a_mat[['x', 'y']].iterrows()}
-nx.draw(G_EHEH_a, pos=node_positions, with_labels=True, node_size= 25, font_size= 7)
-
-# Show the plot inline
-plt.show()
-
-# Airport info
-G_basic_a = nx.Graph()
-G_basic_a.add_edges_from([(0, 2,{'weight': 10}), (1, 2,{'weight': 10}), (2, 3,{'weight': 10}), (3, 4,{'weight': 10}), (3, 5,{'weight': 10})])
-G_basic_e = nx.Graph()
-G_basic_e.add_edges_from([(0, 1,{'weight': 20}), (1, 5,{'weight': 20}), (5, 4,{'weight': 20}), (4, 0,{'weight': 20})])
-p = {}
-
-# Graph
-G_a = G_basic_a
-G_e = G_basic_e
-
+#Choose from: basic:'basic', Eindhoven:'EHEH', Schiphol: 'EHAM'
+airport = 'EHAM'
+#Choose from: Manually insert flight info:'manual', use Schiphol flight API:'API', import saved document 'saved' 
+setting = 'API'
+    
+ 
+# Parameters
 g=9.81
-
 # Aircraft info
-max_speed_a = 1      # Max aircraft velocity
-min_speed_a = 0.1    # Min aircraft velocity
-O_a = [4, 4, 4, 4, 4, 4, 4, 4]   # Origins
-D_a = [0, 0, 0, 0, 0, 0, 0, 0]   # Destinations
-tO_a = [0, 0, 0, 0, 0, 0, 0, 0]  # Appearing times
-#N_aircraft = 4# Number of aircraft
-N_aircraft = len(O_a)# Number of aircraft
+max_speed_a = 10      # Max aircraft velocity
+min_speed_a = 1    # Min aircraft velocity
+start_delay = 180    # Max allowed start delay ('start taxi time' - 'appear time') in seconds
 mu = 0.02            # Rolling resistance
 m_a = 40000          # Airplane mass
 eta = 0.3            # Turbine efficiency
-dock = [0]           # Node corresponding to charging dock
-
+dock = [9]           # Node corresponding to charging dock
 # ETV info
-N_etvs = 2      # Number of ETVs
+N_etvs = 5      # Number of ETVs
 speed_e = 3         # ETV velocity
-bat_e = 200000      #battery capacity
+bat_e = 100000000      #battery capacity
 
+# Load aircraft info
+
+G_a, G_e = Load_Graph(airport)
+
+O_a = []
+D_a = []
+
+if setting == 'manual':
+    O_a = [57, 57, 57, 9, 57, 57, 57, 57]   # Origins
+    D_a = [9, 9, 9, 57, 9, 9, 9, 9]   # Destinations
+    tO_a = [0, 0, 60, 30, 0, 0, 30, 30]  # Appearing times
+    N_aircraft = len(O_a)# Number of aircraft
+elif setting == 'API':
+    gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
+                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':103, '22':98}
+    Flight_orig, Flight_dest, appear_times = Load_Aircraft_Info()
+    
+    tO_a = appear_times
+    
+    for i in range(len(Flight_orig)):
+        O_a.append(gate_runway_locs.get(Flight_orig[i]))   # Origins
+        D_a.append(gate_runway_locs.get(Flight_dest[i]))   # Destinations
+        
+    N_aircraft = 10# Number of aircraft
+    #N_aircraft = len(O_a)# Number of aircraft
+elif setting == 'saved':
+    tO_a = 1
+    O_a = 1
+    D_a = 1
+    N_aircraft = 15# Number of aircraft
+    #N_aircraft = len(O_a)# Number of aircraft
+else:
+     print("Please specify the method to get flight info")   
+
+p = {}
 #pack p
 p['N_aircraft'] = N_aircraft
 p['max_speed_a'] = max_speed_a      # Max aircraft velocity
@@ -82,20 +91,22 @@ for a in range(N_aircraft):
     N_Va.append(len(sp))
     P.append(sp)
 
-
+print("DATA EXTRACTED")
 # Create the Gurobi model
-model = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock)
+model = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay)
 
+print("MODEL CREATED")
 # Optimize the model
 model.optimize()
 
+print("MODEL SOLVED")
 # Display results
 variable_values = {}
 
 if model.status == GRB.OPTIMAL:
     print("Optimal solution found:")
     for var in model.getVars():
-        print(f"{var.varName}: {var.x}")
+        #print(f"{var.varName}: {var.x}")
 
         # Split variable name into parts based on underscores and convert indices to integers
         parts = [int(part) if part.isdigit() else part for part in var.varName.split('_')]
@@ -123,7 +134,7 @@ for a in range(N_aircraft):
                 print(f"{'O'}_{a}_{b}_{i}")
                 
     
-Plotting(variable_values, N_aircraft, N_etvs, P)                 
+Plotting(variable_values, N_aircraft, N_etvs, P, bat_e)                 
          
     
     

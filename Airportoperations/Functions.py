@@ -22,16 +22,16 @@ def LoadAPIdata(date_of_interest, pagelimit):
     page = pagelimit[0]
     page_end = pagelimit[1]
     rawflightdata = []
-    base_url = 'https://api.schiphol.nl/public-flights/flights'
+    base_url = 'https://api.schiphol.nl/operational-flight/flights'
     headers = {
         'Accept': 'application/json',
-        'ResourceVersion': 'v4',
-        'app_id': '1511baff',
-        'app_key': '396dfa82415ffcd90dd22d2fe41383ee'
+        'ResourceVersion': 'v2',
+        'app_id': '719fa989',
+        'app_key': '54a53ddf37aeb5d990ba2b384c23e722'
     }
-        
+    #curl -X GET --verbose -H "app_id: 719fa989" -H "app_key: 54a53ddf37aeb5d990ba2b384c23e722" -H "ResourceVersion: v2" "https://api.schiphol.nl/operational-flight/flights"   
     while page != page_end+1:
-        url = f'{base_url}?scheduleDate={date_of_interest}&includedelays=false&page={page}&sort=%2BscheduleTime'
+        url = f'{base_url}?scheduleDate={date_of_interest}&page={page}'
         
         try:
             response = requests.get(url, headers=headers)
@@ -58,13 +58,14 @@ def LoadAPIdata(date_of_interest, pagelimit):
                   response.text))
             break
     
-    #Remove duplicates
+   #Remove duplicates
     seen_main_flights = set()
-    # Filter out dictionary elements with duplicate 'mainFlight' values
+   
+   # Filter out dictionary elements with duplicate 'mainFlight' values
     flightdata = []
     for flight in rawflightdata:
-        main_flight = flight['mainFlight']
-        if main_flight not in seen_main_flights and flight['publicFlightState'] != {'flightStates': ['CNX']}:
+        main_flight = flight['aircraftRegistration']
+        if main_flight not in seen_main_flights and flight['cdmFlightState'] != 'CNX':
             seen_main_flights.add(main_flight)
             flightdata.append(flight)
             
@@ -128,17 +129,11 @@ def LoadOSMdata(airport_name, runways, operational_gates):
     runway_nodes = G_data_edges[filter_condition]
     list_runway_nodes = runway_nodes.index.get_level_values('u').to_list()
     # Plot the graph with highlighted nodes
-    node_colors = {node: 'r' if node in list_runway_nodes else 'g' if node in gate_nodes else 'k' for node in G_taxi.nodes()}
-
-
-    node_nr_id = {node: i for i, node in enumerate(G_taxi.nodes())}
-    node_x = G_taxi.nodes('x')
-    node_y = G_taxi.nodes('y')
-    
+    node_colors = {node: 'r' if node in list_runway_nodes else 'g' if node in gate_nodes else 'k' for node in G_taxi.nodes()} 
 
 
     fig, ax = ox.plot_graph(G_taxi, node_color=list(node_colors.values()), bgcolor='w', edge_color = 'k' ,show=True)
-    return G_taxi, gates, list_runway_nodes, node_mapping
+    return G_taxi, gates, list_runway_nodes
     
 def Routing(origins, destinations, graph):
     route = {}

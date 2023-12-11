@@ -9,31 +9,42 @@ from gurobipy import GRB
 
 #Import API data from schiphhol
 date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
-pagelimit = [0,3]                   #Specify the amount of pages of data
+pagelimit = [0,20]                   #Specify the amount of pages of data
 
 from Functions import LoadAPIdata   #Returns a list of dicts with flight info
 flightdata = LoadAPIdata(date_of_interest, pagelimit)
 
 #Airport inputs
 airport_name = 'Schiphol, The Netherlands'                  #Name of airport for usecase
-operational_runways = ['18R/36L','18C/36C','06/24','09/27','18L/36R']   #Names of the runways of that airport
+operational_runways = []   #Names of the runways of that airport
 operational_gates = []
 appear_times_T = []
 
 for flight in flightdata:
-    operational_gates.append(flight['gate'])
+    operational_gates.append(flight['ramp']['current'])
+    operational_runways.append(flight['runway'])
     if flight['flightDirection'] == 'D':
         appear_times_T.append(flight['actualOffBlockTime'])
     else:
         appear_times_T.append(flight['actualLandingTime'])
-    
-operational_gates = ['H1' if x is None else x for x in operational_gates]
 
+Flight_orig =[]
+Flight_dest=[]
+
+for flight in flightdata:
+    if flight['flightDirection'] == 'D':
+        Flight_orig.append(flight['ramp']['current'])
+        Flight_dest.append(flight['runway'])
+    else:
+        Flight_dest.append(flight['ramp']['current'])
+        Flight_orig.append(flight['runway'])
 
 from Functions import LoadOSMdata
-[G_taxi, gates, list_runway_nodes, node_mapping ]= LoadOSMdata(airport_name, operational_runways, operational_gates)
+[G_taxi, gates, list_runway_nodes]= LoadOSMdata(airport_name, operational_runways, operational_gates)
 
 
+        
+        
 destination_gate = gates['ref']
 dest_list = ox.distance.nearest_nodes(G_taxi, gates.geometry.x , gates.geometry.y , return_dist=False)
 destinations = dest_list

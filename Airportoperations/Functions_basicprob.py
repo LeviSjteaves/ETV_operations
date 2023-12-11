@@ -4,15 +4,164 @@ Created on Wed Nov 29 09:10:55 2023
 
 @author: levi1
 """
-
+import osmnx as ox
 import gurobipy as grp
 from gurobipy import GRB
 import networkx as nx
 import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.animation import FuncAnimation
+import pandas as pd
+import requests
+import seaborn as sns
+import sys
+#from Functions_basicprob import appeartimes
+from datetime import datetime
 
-def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock):
+def Load_Graph(airport):
+    if airport == 'EHEH':
+        # Load CSV file with EHEH edges
+        edges_EHEH_a_df = pd.read_csv('EHEH_a.csv')
+        G_EHEH_a = nx.from_pandas_edgelist(edges_EHEH_a_df, 'EndNodes_1', 'EndNodes_2', edge_attr='weight', create_using=nx.Graph)
+        edges_EHEH_e_df = pd.read_csv('EHEH_e.csv')
+        G_EHEH_e = nx.from_pandas_edgelist(edges_EHEH_e_df, 'EndNodes_1', 'EndNodes_2', create_using=nx.Graph)
+    
+        nodes_EHEH_a_mat = pd.read_csv('EHEH_nodes_a.csv')
+        node_positions = {node_id+1: [float(x), float(y)] for node_id, (x, y) in nodes_EHEH_a_mat[['x', 'y']].iterrows()}
+        nx.draw(G_EHEH_a, pos=node_positions, with_labels=True, node_size= 25, font_size= 7)
+        
+        G_a = G_EHEH_a
+        G_e = G_EHEH_a
+        
+        # Show the plot inline
+        plt.show()
+    
+    elif airport == 'basic':
+        # Airport info
+        G_basic_a = nx.Graph()
+        G_basic_a.add_edges_from([(0, 2,{'weight': 10}), (1, 2,{'weight': 10}), (2, 3,{'weight': 10}), (3, 4,{'weight': 10}), (3, 5,{'weight': 10})])
+        G_basic_e = nx.Graph()
+        G_basic_e.add_edges_from([(0, 1,{'weight': 20}), (1, 5,{'weight': 20}), (5, 4,{'weight': 20}), (4, 0,{'weight': 20})])
+        G_a = G_basic_a
+        G_e = G_basic_e
+    
+    elif airport == 'EHAM':
+
+        file_path = "EHAM_graph_hand.gpickle"
+        
+        G_AMS_a = nx.read_gpickle(file_path)
+        G_a = G_AMS_a
+        G_e = G_AMS_a
+        
+        node_positions = nx.get_node_attributes(G_a, 'pos')
+        nx.draw(G_a, pos=node_positions, with_labels=True, node_size= 25, font_size= 12)
+    
+    else:
+        print("Select correct airport!")
+    return G_a, G_e
+
+def appeartimes(appear_times_T, date_of_interest):
+    timestamp_format1 = "%Y-%m-%dT%H:%M:%S.%f%z"
+    timestamp_format2 = "%Y-%m-%d"
+
+    # Parse the timestamp string into a datetime object
+    appear_times = []
+    for i in range(len(appear_times_T)):
+        appear_times_C = datetime.strptime(appear_times_T[i], timestamp_format1)
+        timestamp_reference = datetime.strptime(date_of_interest, timestamp_format2)
+        appear_times.append(int(appear_times_C.timestamp())-int(timestamp_reference.timestamp()))
+    return appear_times
+
+def Load_Aircraft_Info():
+    #Import API data from schiphhol
+    date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
+    pagelimit = [0,20]                   #Specify the amount of pages of data
+
+    page = pagelimit[0]
+    page_end = pagelimit[1]
+    rawflightdata = []
+    base_url = 'https://api.schiphol.nl/operational-flight/flights'
+    headers = {
+        'Accept': 'application/json',
+        'ResourceVersion': 'v2',
+        'app_id': '719fa989',
+        'app_key': '54a53ddf37aeb5d990ba2b384c23e722'
+    }
+    #curl -X GET --verbose -H "app_id: 719fa989" -H "app_key: 54a53ddf37aeb5d990ba2b384c23e722" -H "ResourceVersion: v2" "https://api.schiphol.nl/operational-flight/flights"   
+    while page != page_end+1:
+        url = f'{base_url}?scheduleDate={date_of_interest}&page={page}'
+        
+        try:
+            response = requests.get(url, headers=headers)
+        except requests.exceptions.ConnectionError as error:
+            print(error)
+            sys.exit()
+    
+        if response.status_code == 200:
+            flightList = response.json()
+            rawflightdata.extend(flightList['flights'])
+            # Check if there is a next page in the response
+            next_page_link = response.links.get('next').get('url')
+            if next_page_link:
+                # Extract the page number from the next page link and update the 'page' variable
+                page = int(next_page_link.split('page=')[1])
+            else:
+                # If there is no next page, break out of the loop
+                break  
+                  
+        else:
+            print('''Something went wrong
+                  Http response code: {}
+                  {}'''.format(response.status_code,
+                  response.text))
+            break
+    
+   #Remove duplicates
+    seen_main_flights = set()
+   
+   # Filter out dictionary elements with duplicate 'mainFlight' values
+    flightdata = []
+    for flight in rawflightdata:
+        main_flight = flight['aircraftRegistration']
+        if main_flight not in seen_main_flights and flight['cdmFlightState'] != 'CNX':
+            seen_main_flights.add(main_flight)
+            flightdata.append(flight)
+
+    operational_runways = []   #Names of the runways of that airport
+    operational_gates = []
+    appear_times_T = []
+
+    for flight in flightdata:
+        operational_gates.append(flight['ramp']['current'])
+        operational_runways.append(flight['runway'])
+        if flight['flightDirection'] == 'D':
+            appear_times_T.append(flight['actualOffBlockTime'])
+        else:
+            appear_times_T.append(flight['actualLandingTime'])
+
+    appear_times = appeartimes(appear_times_T, date_of_interest)
+    
+    Flight_orig=[]
+    Flight_dest=[]
+
+    for flight in flightdata:
+        if flight['flightDirection'] == 'D':
+            Flight_orig.append(flight['ramp']['current'][:-2])
+            Flight_dest.append(flight['runway'])
+        else:
+            Flight_dest.append(flight['ramp']['current'][:-2])
+            Flight_orig.append(flight['runway'])
+            
+    day_before = [index for index, num in enumerate(appear_times) if num <= 0]
+    
+    # Remove the specified index
+    for i in range(len(day_before)):
+        if day_before[i] in range(len(appear_times)):
+            appear_times.pop(day_before[i])   
+            Flight_orig.pop(day_before[i]) 
+            Flight_dest.pop(day_before[i]) 
+
+    return Flight_orig, Flight_dest, appear_times
+    
+def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay):
     model = grp.Model("Aircraft_Taxiing")
     
     # unpack P
@@ -49,7 +198,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock):
                 for m in range(len(P[b])):
                     e_col = []
                     #possibility to be at the same node at the same time
-                    if a < b and P[a][n] == P[b][m] and (t_min[a][n] <= t_max[b][m] and t_min[b][m] <= t_max[a][n]):
+                    if a < b and P[a][n] == P[b][m] and (t_min[a][n] <= t_max[b][m]+start_delay and t_min[b][m] <= t_max[a][n]+start_delay):
                         e_col = [a,b]
                         I_col_nodes.append(P[a][n])
                         I_col.append(e_col)
@@ -60,7 +209,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock):
         for b in range(N_aircraft):
             for n in range(1, len(P[a])):
                 for m in range(1, len(P[b])):
-                    if a < b and P[a][n] == P[b][m] and P[a][n-1] == P[b][m-1] and t_min[a][n] <= t_max[b][m] and t_min[b][m-1] <= t_max[a][n-1]:
+                    if a < b and P[a][n] == P[b][m] and P[a][n-1] == P[b][m-1] and t_min[a][n] <= t_max[b][m]+start_delay and t_min[b][m-1] <= t_max[a][n-1]+start_delay:
                        e_col_ot = [a,b]
                        I_col_ot_nodes.append([P[a][n-1],P[a][n]])
                        I_col_ot.append(e_col_ot)
@@ -71,7 +220,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock):
         for b in range(N_aircraft):
             for n in range(1, len(P[a])):
                 for m in range(len(P[b])-1):
-                    if a < b and P[a][n] == P[b][m] and P[a][n-1] == P[b][m+1]  and t_min[a][n] <= t_max[b][m] and t_min[b][m+1] <= t_max[a][n-1]:
+                    if a < b and P[a][n] == P[b][m] and P[a][n-1] == P[b][m+1]  and t_min[a][n] <= t_max[b][m]+start_delay and t_min[b][m+1] <= t_max[a][n-1]+start_delay:
                        e_col_ho = [a,b]
                        I_col_ho_nodes.append([P[a][n-1],P[a][n]])
                        I_col_ho.append(e_col_ho)   
@@ -110,7 +259,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock):
            
     # Objective function: minimize emissions (only rolling resistance) + total taxitime
     model.setObjective(grp.quicksum(mu*m_a*g*d_a[a]*eta*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,b,i] for b in range(N_aircraft)) for i in range(N_etvs))) for a in range(N_aircraft)) 
-                       +grp.quicksum(t[a, n] for a in range(N_aircraft) for n in range(1, len(P[a])))
+                       +grp.quicksum(t[a,len(P[a])-1]-t[a,0] for a in range(N_aircraft))
                        , sense=GRB.MINIMIZE)
                    #-grp.quicksum(E[i,a] for i in range(N_etvs) for a in range(N_aircraft))   
      
@@ -118,6 +267,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock):
     for a in range(N_aircraft):
         #Min start time
         model.addConstr(t[a, 0] >= tO_a[a], f"appear_constraint_{a}")
+        model.addConstr(t[a, 0] <= tO_a[a]+start_delay, f"appear_constraint_{a}")
         # max one etv per aircraft
         model.addConstr(grp.quicksum(X[a, i] +grp.quicksum(O[a,b,i] for b in range(N_aircraft)) for i in range(N_etvs)) <= 1, f"one_towing_task_{a}")
         for n in range(1, len(P[a])):
@@ -134,13 +284,14 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock):
     
     for n in range(len(I_col_ho_nodes)):   
         idx_aircraftpairs = [i for i, sublist in enumerate(I_col) if sublist == I_col_ho[n]]
-        model.addConstr(Z[idx_aircraftpairs[0]]-Z[idx_aircraftpairs[1]] == 0, f"collision_headon_node_{n}")
+        for i in range(len(idx_aircraftpairs)-1):
+            model.addConstr(Z[idx_aircraftpairs[i]]-Z[idx_aircraftpairs[i+1]] == 0, f"collision_headon_node_{n}")
             
     for n in range(len(I_col_ot_nodes)):  
         idx_aircraftpairs = [i for i, sublist in enumerate(I_col) if sublist == I_col_ot[n]]
-        model.addConstr(Z[idx_aircraftpairs[0]]-Z[idx_aircraftpairs[1]] == 0, f"collision_overtake_node_{n}")
-        #model.addConstr(Z[idx_aircraftpairs[0]]+Z[idx_aircraftpairs[1]] == 1, f"collision_overtake_node_{n}")
-                
+        for i in range(len(idx_aircraftpairs)-1):
+            model.addConstr(Z[idx_aircraftpairs[i]]-Z[idx_aircraftpairs[i+1]] == 0, f"collision_headon_node_{n}")
+        
     #Ordering of tasks
     for i in range(N_etvs):
         model.addConstr(grp.quicksum(X[a,i] for a in range(N_aircraft)) <= 1)
@@ -178,8 +329,8 @@ def Short_path_dist(G, n1, n2):
     dist = nx.shortest_path_length(G, source=n1, target=n2, weight='weight')
     return dist
 
-def Plotting(variable_values, N_aircraft, N_etvs, P):
-    colors = ['grey','blue','green','red','yellow']
+def Plotting(variable_values, N_aircraft, N_etvs, P, bat_e):
+    colors = sns.color_palette('husl', n_colors=N_etvs)
     etv_color = []
     for a in range(N_aircraft):
         towed = sum(variable_values['X'][a][i] + sum(variable_values['O'][a][b][i] for b in range(N_aircraft)) for i in range(N_etvs)) 
@@ -187,9 +338,9 @@ def Plotting(variable_values, N_aircraft, N_etvs, P):
             for i in range(N_etvs):
                 tow = variable_values['X'][a][i] + sum(variable_values['O'][a][b][i] for b in range(N_aircraft))
                 if tow == 1:
-                    etv_color.append(colors[i+1])
+                    etv_color.append(colors[i])
         else:
-            etv_color.append(colors[0])
+            etv_color.append('grey')
                
                
     # Create a figure and axis
@@ -200,63 +351,27 @@ def Plotting(variable_values, N_aircraft, N_etvs, P):
             start_time = variable_values['t'][a][0]
             duration = variable_values['t'][a][len(P[a])-1] - start_time
             
-            ax.barh(a, duration, left=start_time, color=etv_color[a])
-
+            ax.barh(a, duration/60, left=start_time/60, color=etv_color[a])
+            ax.plot(variable_values['t'][a][0]/60, a, 'go', markersize=10)
             for n in range(len(variable_values['t'][a])):
                 node_number= P[a][n]
-                ax.text(variable_values['t'][a][n], a, str(node_number), color='black',
+                ax.text(variable_values['t'][a][n]/60, a, str(node_number), color='black',
                     ha='center', va='center', fontweight='bold', fontsize= 7)
                 for i in range(len(variable_values['C'])):
                     if variable_values['C'][i][a] == 1:
-                        ax.text(variable_values['t'][a][len(P[a])-1], a, str('C'), color='green',
+                        ax.text(variable_values['t'][a][len(P[a])-1]/60, a, str('C'), color='green',
                             ha='center', va='center', fontweight='bold', fontsize= 12)
                     if variable_values['X'][a][i] == 1:
-                        ax.text(variable_values['t'][a][0], a+0.5, variable_values['E'][i][a], color='black',
+                        ax.text(variable_values['t'][a][0]/60, a+0.5, round(variable_values['E'][i][a]/bat_e,2), color='black',
                             ha='center', va='center', fontweight='normal', fontsize= 7)
                     for b in range(N_aircraft): 
                         if variable_values['O'][a][b][i] == 1: 
-                            ax.text(variable_values['t'][b][0], b+0.5, variable_values['E'][i][b], color='black',
+                            ax.text(variable_values['t'][b][0]/60, b+0.5, round(variable_values['E'][i][b]/bat_e,2), color='black',
                                 ha='center', va='center', fontweight='normal', fontsize= 7)  
                             
                             
     # Set labels and title
-    ax.set_xlabel('Time')
+    ax.set_xlabel('Time [min]')
     ax.set_ylabel('Aircraft Task')
     ax.set_yticks(range(N_aircraft))
     ax.set_yticklabels([f'Aircraft {i}' for i in range(N_aircraft)])
- 
-    '''
-    # Extract nodes and
-    Dvars_time = Dvars_name[0:sum(N_Va)]
-    Dvars_value_time = Dvars_value[0:sum(N_Va)]
-    time_nodes_aircraft_inv = []
-    time_nodes_aircraft = []
-    time_aircraft = []
-    time_nodes = []
-    
-    for s in Dvars_time:
-        time_aircraft.append(int(s.split('_')[1])) 
-        time_nodes.append(int(s.split('_')[2]))
-        
-    time_nodes_aircraft_inv.append(Dvars_value_time)
-    time_nodes_aircraft_inv.append(time_aircraft)
-    time_nodes_aircraft_inv.append(time_nodes)
-    
-    time_nodes_aircraft = [[time_nodes_aircraft_inv[0][i], time_nodes_aircraft_inv[1][i], time_nodes_aircraft_inv[2][i]] for i in range(len(Dvars_time))]
-    sorted_time_nodes_aircraft = sorted(time_nodes_aircraft, key=lambda x: x[0]) 
-    
-    pos = nx.spring_layout(G_a)
-    #times = [0,5,10,15,20,25,30,35,40,45,50,55,60,65,70]
-    times = np.linspace(0, 70, 25).tolist()
-    
-    
-    for i in range(1,len(times)):  
-        nx.draw(G_a, pos, with_labels=True, node_size=500, node_color='skyblue', font_size=8)
-        plt.title(f'Time: {times[i]}')
-        for k in range(len(sorted_time_nodes_aircraft)):
-            if times[i-1]<= sorted_time_nodes_aircraft[k][0]  < times[i]:
-                #nx.draw_networkx_nodes(G_a, pos, nodelist=[P[sorted_time_nodes_aircraft[k][1]][sorted_time_nodes_aircraft[k][2]]], node_color='red', node_size=500, label=f'aircraft: {sorted_time_nodes_aircraft[k][1]}')
-                nx.draw_networkx_labels(G_a, pos, labels={P[sorted_time_nodes_aircraft[k][1]][sorted_time_nodes_aircraft[k][2]]: f'\n aircraft: {sorted_time_nodes_aircraft[k][1]} Time: {times[i]}'}, font_size=8, font_color='black')
-                
-    plt.show() 
-    '''           
