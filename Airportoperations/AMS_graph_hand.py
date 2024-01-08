@@ -7,20 +7,54 @@ Created on Mon Dec 11 10:20:54 2023
 
 import networkx as nx
 from math import sqrt
-from pyproj import Proj, transform
+from pyproj import CRS, Transformer
 import pandas as pd
+import numpy as np
 
 def calculate_distance(coord1, coord2):
     return sqrt((coord2[0] - coord1[0]) ** 2 + (coord2[1] - coord1[1]) ** 2)
 
 
 def translate_coordinates_to_meters(node_coordinates):
-    in_proj = Proj(init='epsg:4326')  # WGS 84
-    out_proj = Proj(init='epsg:3395')  # Web Mercator
+    in_crs = CRS('epsg:4326')  # WGS 84
+    out_crs = CRS('epsg:3395')  # Web Mercator
+
+    transformer = Transformer.from_crs(in_crs, out_crs)
 
     for node, (lat, lon) in node_coordinates.items():
-        x, y = transform(in_proj, out_proj, lon, lat)
+        x, y = transformer.transform(lat, lon)
         node_coordinates[node] = (x, y)
+        
+def geo_to_laea(lat, lon):
+    # preliminary values
+    a = 6378137  # m
+    f = 1/298.257222101
+    e = np.sqrt(2*f - f**2)
+    lat0 = np.deg2rad(52)  # degrees N
+    long0 = np.deg2rad(10)  # degrees E
+    X0 = 4321000  # m
+    Y0 = 3210000  # m
+
+    # conversion
+    lat = np.deg2rad(lat)  # degrees
+    long = np.deg2rad(lon)  # degrees
+
+    # preliminary values
+    q = (1 - e**2) * (np.sin(lat) / (1 - e**2 * (np.sin(lat))**2) - 1/(2*e) * np.log((1 - e*np.sin(lat)) / (1 + e*np.sin(lat))))
+    q0 = (1 - e**2) * (np.sin(lat0) / (1 - e**2 * (np.sin(lat0))**2) - 1/(2*e) * np.log((1 - e*np.sin(lat0)) / (1 + e*np.sin(lat0))))
+    qp = (1 - e**2) * (1 / (1 - e**2) - 1/(2*e) * np.log((1 - e) / (1 + e)))
+    b = np.arcsin(q/qp)
+    b0 = np.arcsin(q0/qp)
+    Rq = a * (qp/2)**(1/2)
+    D = a * np.cos(lat0) / ((1 - e**2 * (np.sin(lat0))**2)**(1/2) * Rq * np.cos(b0))
+    B = Rq * (2 / (1 + np.sin(b0) * np.sin(b) + np.cos(b0) * np.cos(b) * np.cos(long - long0)))**(1/2)
+    N = Y0 + (B/D) * (np.cos(b0) * np.sin(b) - np.sin(b0) * np.cos(b) * np.cos(long - long0))
+    E = X0 + B * D * np.cos(b) * np.sin(long - long0)
+
+    return tuple((float(N), float(E)))
+
+        
+        
 
 def create_airport_graph(node_coordinates, edges):
     G = nx.MultiDiGraph()
@@ -155,6 +189,12 @@ node_coordinates = {
 }
 
 translate_coordinates_to_meters(node_coordinates)
+
+results={}
+for i in range(len(node_coordinates)):
+    results[i] = (geo_to_laea(node_coordinates[i][0],node_coordinates[i][1]))
+
+#node_coordinates = results
 
 node_coordinates_df = pd.DataFrame.from_dict(node_coordinates, orient='index').reset_index()
 node_coordinates_df.columns = ['node','x', 'y']

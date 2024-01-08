@@ -16,7 +16,7 @@ import numpy as np
 #Choose from: basic:'basic', Eindhoven:'EHEH', Schiphol: 'EHAM'
 airport = 'EHAM'
 #Choose from: Manually insert flight info:'manual', use Schiphol flight API:'API', import saved document 'saved' 
-setting = 'saved'
+setting = 'API'
     
  
 # Parameters
@@ -24,19 +24,19 @@ g=9.81
 # Aircraft info
 max_speed_a = 10      # Max aircraft velocity
 min_speed_a = 1    # Min aircraft velocity
-start_delay = 180    # Max allowed start delay ('start taxi time' - 'appear time') in seconds
+start_delay = 120    # Max allowed start delay ('start taxi time' - 'appear time') in seconds
 mu = 0.02            # Rolling resistance
 m_a = 40000          # Airplane mass
 eta = 0.3            # Turbine efficiency
-dock = [9]           # Node corresponding to charging dock
+dock = [44]           # Node corresponding to charging dock
 # ETV info
-N_etvs = 3      # Number of ETVs
-speed_e = 3         # ETV velocity
-bat_e = 100000000      #battery capacity
+N_etvs = 3     # Number of ETVs
+speed_e = 15         # ETV velocity
+bat_e = 50000000      #battery capacity
 
 # Load aircraft info
 
-G_a, G_e = Load_Graph(airport)
+G_a, G_e, gate_runway_locs = Load_Graph(airport)
 
 O_a = []
 D_a = []
@@ -46,10 +46,12 @@ if setting == 'manual':
     D_a = [9, 9, 9, 57, 9, 9, 9, 9]   # Destinations
     tO_a = [0, 0, 60, 30, 0, 0, 30, 30]  # Appearing times
     N_aircraft = len(O_a)# Number of aircraft
+    
 elif setting == 'API':
-    gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
-                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':103, '22':98}
-    Flight_orig, Flight_dest, appear_times = Load_Aircraft_Info()
+    date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
+    pagelimit = [20,21]                   #Specify the amount of pages of data
+    
+    Flight_orig, Flight_dest, appear_times = Load_Aircraft_Info(date_of_interest, pagelimit)
     
     tO_a = appear_times
     
@@ -118,7 +120,6 @@ if model.status == GRB.OPTIMAL:
     print("Optimal solution found:")
     for var in model.getVars():
         #print(f"{var.varName}: {var.x}")
-
         # Split variable name into parts based on underscores and convert indices to integers
         parts = [int(part) if part.isdigit() else part for part in var.varName.split('_')]
 
@@ -130,7 +131,7 @@ if model.status == GRB.OPTIMAL:
             current_dict = current_dict[part]
 
         # Assign the variable value to the nested dictionary
-        current_dict[parts[-1]] = var.x
+        current_dict[parts[-1]] = round(var.x)
 
     print("Optimal objective value:", model.objVal)
 else:
@@ -145,7 +146,7 @@ for a in range(N_aircraft):
                 print(f"{'O'}_{a}_{I_up[a][b]}_{i}")
                 
     
-Plotting(variable_values, N_aircraft, N_etvs, P, bat_e, I_up)                 
+Plotting(variable_values, N_aircraft, N_etvs, P, bat_e, I_up, p, d_a,  appear_times)                 
          
     
     
