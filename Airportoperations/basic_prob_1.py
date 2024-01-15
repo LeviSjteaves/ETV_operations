@@ -26,13 +26,19 @@ max_speed_a = 10      # Max aircraft velocity
 min_speed_a = 1    # Min aircraft velocity
 start_delay = 120    # Max allowed start delay ('start taxi time' - 'appear time') in seconds
 mu = 0.02            # Rolling resistance
-m_a = 40000          # Airplane mass
+m_a = 80000          # Airplane mass
 eta = 0.3            # Turbine efficiency
 dock = [44]           # Node corresponding to charging dock
 # ETV info
-N_etvs = 3     # Number of ETVs
+N_etvs = 1     # Number of ETVs
 speed_e = 15         # ETV velocity
-bat_e = 50000000      #battery capacity
+bat_e = 1440000000/2      #battery capacity \Joule
+eta_e = 0.9
+I_ch = 100000 # Joule/second
+E_e = 1250 # joule per unit distance [m]
+d_sep = 100
+v_avg = 10
+t_pushback = 30 #pushback time in seconds
 
 # Load aircraft info
 
@@ -49,9 +55,9 @@ if setting == 'manual':
     
 elif setting == 'API':
     date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
-    pagelimit = [20,21]                   #Specify the amount of pages of data
+    pagelimit = [20,23]                   #Specify the amount of pages of data
     
-    Flight_orig, Flight_dest, appear_times = Load_Aircraft_Info(date_of_interest, pagelimit)
+    Flight_orig, Flight_dest, appear_times, dep, flightdata = Load_Aircraft_Info(date_of_interest, pagelimit)
     
     tO_a = appear_times
     
@@ -59,23 +65,25 @@ elif setting == 'API':
         O_a.append(gate_runway_locs.get(Flight_orig[i]))   # Origins
         D_a.append(gate_runway_locs.get(Flight_dest[i]))   # Destinations
     
-    N_aircraft = 10# Number of aircraft
-    #N_aircraft = len(O_a)# Number of aircraft
+    #N_aircraft = 2# Number of aircraft
+    N_aircraft = len(O_a)# Number of aircraft
     
 elif setting == 'saved':
     gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
                         'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':103, '22':98}
     
     tO_a = np.load('Flight_t.npy')
+    appear_times = tO_a
     Flight_orig = np.load('Flight_O.npy')
     Flight_dest = np.load('Flight_D.npy')
+    dep = np.load('Flight_dep.npy')
     
     for i in range(len(Flight_orig)):
         O_a.append(gate_runway_locs.get(Flight_orig[i]))   # Origins
         D_a.append(gate_runway_locs.get(Flight_dest[i]))   # Destinations
     
-    N_aircraft = 10# Number of aircraft
-    #N_aircraft = len(O_a)# Number of aircraft
+    #N_aircraft = 10# Number of aircraft
+    N_aircraft = len(O_a)# Number of aircraft
     
 else:
      print("Please specify the method to get flight info")   
@@ -92,6 +100,12 @@ p['g'] = g
 p['mu'] = mu          # Rolling resistance
 p['m_a'] = m_a          # Airplane mass
 p['eta'] = eta 
+p['eta_e'] = eta_e
+p['I_ch'] = I_ch 
+p['E_e'] = E_e
+p['d_sep'] = d_sep
+p['v_avg'] = v_avg 
+p['t_pushback'] = t_pushback
 
 # Aircraft routing
 N_Va = []
@@ -106,7 +120,7 @@ for a in range(N_aircraft):
 
 print("DATA EXTRACTED")
 # Create the Gurobi model
-model, I_up, I_do = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay)
+model, I_up, I_do = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep)
 
 print("MODEL CREATED")
 # Optimize the model
@@ -131,7 +145,7 @@ if model.status == GRB.OPTIMAL:
             current_dict = current_dict[part]
 
         # Assign the variable value to the nested dictionary
-        current_dict[parts[-1]] = round(var.x)
+        current_dict[parts[-1]] = round(var.x, 5)
 
     print("Optimal objective value:", model.objVal)
 else:
@@ -146,7 +160,7 @@ for a in range(N_aircraft):
                 print(f"{'O'}_{a}_{I_up[a][b]}_{i}")
                 
     
-Plotting(variable_values, N_aircraft, N_etvs, P, bat_e, I_up, p, d_a,  appear_times)                 
+Plotting(variable_values, N_aircraft, N_etvs, P, bat_e, I_up, p, d_a,  appear_times, G_a)                 
          
     
     
