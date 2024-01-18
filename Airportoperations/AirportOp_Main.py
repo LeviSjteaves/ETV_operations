@@ -5,18 +5,32 @@ Created on Fri Nov 17 11:17:48 2023
 @author: levi1
 """
 
+
+
 from gurobipy import GRB
 import networkx as nx
-from Functions_basicprob import Create_model
-from Functions_basicprob import Plotting
-from Functions_basicprob import Load_Graph
-from Functions_basicprob import Load_Aircraft_Info
+from importlib import import_module
+
+#model 1 for time-dep energycons. 
+#model 2 for dist-dep energycons.
+M = 1
+module = import_module(f'AirportOp_Func_{M}')
+Load_Aircraft_Info = module.Load_Aircraft_Info
+Create_model = module.Create_model
+Plotting = module.Plotting
+Load_Graph = module.Load_Graph
+
+#from f'AirportOp_Func_{M}' import Load_Aircraft_Info
 import numpy as np
+import matplotlib.pyplot as plt
+
+#close all open plots
+plt.close('all')
 
 #Choose from: basic:'basic', Eindhoven:'EHEH', Schiphol: 'EHAM'
 airport = 'EHAM'
 #Choose from: Manually insert flight info:'manual', use Schiphol flight API:'API', import saved document 'saved' 
-setting = 'API'
+setting = 'saved'
     
  
 # Parameters
@@ -24,19 +38,19 @@ g=9.81
 # Aircraft info
 max_speed_a = 10      # Max aircraft velocity
 min_speed_a = 1    # Min aircraft velocity
-start_delay = 120    # Max allowed start delay ('start taxi time' - 'appear time') in seconds
+start_delay = 180    # Max allowed start delay ('start taxi time' - 'appear time') in seconds
 mu = 0.02            # Rolling resistance
-m_a = 80000          # Airplane mass
+m_a = [50000, 50000, 50000, 80000, 80000, 80000, 300000, 300000, 300000, 300000]        # Airplane mass
 eta = 0.3            # Turbine efficiency
 dock = [44]           # Node corresponding to charging dock
 # ETV info
 N_etvs = 1     # Number of ETVs
 speed_e = 15         # ETV velocity
-bat_e = 1440000000/2      #battery capacity \Joule
+bat_e = 1440000000      #battery capacity \Joule
 eta_e = 0.9
 I_ch = 100000 # Joule/second
-E_e = 1250 # joule per unit distance [m]
-d_sep = 100
+E_e = 1250# joule per unit distance [m]
+d_sep = [22, 28, 37, 45, 49, 55, 72, 76, 77, 84]
 v_avg = 10
 t_pushback = 30 #pushback time in seconds
 
@@ -55,9 +69,9 @@ if setting == 'manual':
     
 elif setting == 'API':
     date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
-    pagelimit = [20,23]                   #Specify the amount of pages of data
+    pagelimit = [20,20]                   #Specify the amount of pages of data
     
-    Flight_orig, Flight_dest, appear_times, dep, flightdata = Load_Aircraft_Info(date_of_interest, pagelimit)
+    Flight_orig, Flight_dest, appear_times, dep, cat, flightdata = Load_Aircraft_Info(date_of_interest, pagelimit)
     
     tO_a = appear_times
     
@@ -77,13 +91,14 @@ elif setting == 'saved':
     Flight_orig = np.load('Flight_O.npy')
     Flight_dest = np.load('Flight_D.npy')
     dep = np.load('Flight_dep.npy')
+    cat = np.load('Flight_info.npy')
     
     for i in range(len(Flight_orig)):
         O_a.append(gate_runway_locs.get(Flight_orig[i]))   # Origins
         D_a.append(gate_runway_locs.get(Flight_dest[i]))   # Destinations
     
-    #N_aircraft = 10# Number of aircraft
-    N_aircraft = len(O_a)# Number of aircraft
+    N_aircraft = 5# Number of aircraft
+    #N_aircraft = len(O_a)# Number of aircraft
     
 else:
      print("Please specify the method to get flight info")   
@@ -120,7 +135,7 @@ for a in range(N_aircraft):
 
 print("DATA EXTRACTED")
 # Create the Gurobi model
-model, I_up, I_do = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep)
+model, I_up, I_do = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep, cat)
 
 print("MODEL CREATED")
 # Optimize the model
@@ -145,7 +160,7 @@ if model.status == GRB.OPTIMAL:
             current_dict = current_dict[part]
 
         # Assign the variable value to the nested dictionary
-        current_dict[parts[-1]] = round(var.x, 5)
+        current_dict[parts[-1]] = round(var.x,2)
 
     print("Optimal objective value:", model.objVal)
 else:
@@ -160,7 +175,7 @@ for a in range(N_aircraft):
                 print(f"{'O'}_{a}_{I_up[a][b]}_{i}")
                 
     
-Plotting(variable_values, N_aircraft, N_etvs, P, bat_e, I_up, p, d_a,  appear_times, G_a)                 
+colors_air, etv_color = Plotting(variable_values, N_aircraft, N_etvs, P, bat_e, I_up, p, d_a,  appear_times, G_a, cat)                 
          
     
     
