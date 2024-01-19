@@ -35,18 +35,20 @@ setting = 'saved'
  
 # Parameters
 g=9.81
-# Aircraft info
+# Aircraft parameters
 max_speed_a = 10      # Max aircraft velocity
 min_speed_a = 1    # Min aircraft velocity
+max_speed_e = 5
+min_speed_e = 1
+free_speed_e = 15
 start_delay = 180    # Max allowed start delay ('start taxi time' - 'appear time') in seconds
 mu = 0.02            # Rolling resistance
 m_a = [50000, 50000, 50000, 80000, 80000, 80000, 300000, 300000, 300000, 300000]        # Airplane mass
 eta = 0.3            # Turbine efficiency
-dock = [44]           # Node corresponding to charging dock
-# ETV info
-N_etvs = 1     # Number of ETVs
-speed_e = 15         # ETV velocity
-bat_e = 1440000000      #battery capacity \Joule
+dock = [122]           # Node corresponding to charging dock
+N_etvs_cat1 = 1     # Number of ETVs of category 1
+N_etvs_cat2 = 1     # Number of ETVs of category 2
+bat_e = 2440000000      #battery capacity \Joule
 eta_e = 0.9
 I_ch = 100000 # Joule/second
 E_e = 1250# joule per unit distance [m]
@@ -55,7 +57,7 @@ v_avg = 10
 t_pushback = 30 #pushback time in seconds
 
 # Load aircraft info
-
+N_etvs = N_etvs_cat1+N_etvs_cat2
 G_a, G_e, gate_runway_locs = Load_Graph(airport)
 
 O_a = []
@@ -84,7 +86,7 @@ elif setting == 'API':
     
 elif setting == 'saved':
     gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
-                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':103, '22':98}
+                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':108, '22':98}
     
     tO_a = np.load('Flight_t.npy')
     appear_times = tO_a
@@ -108,12 +110,16 @@ p = {}
 p['N_aircraft'] = N_aircraft
 p['max_speed_a'] = max_speed_a      # Max aircraft velocity
 p['min_speed_a'] = min_speed_a 
-p['N_etvs'] = N_etvs         # Number of ETVs
-p['speed_e'] = speed_e
+p['N_etvs'] = N_etvs                # Number of ETVs
+p['N_etvs_cat1'] = N_etvs_cat1
+#p['N_etvs_cat2'] = N_etvs_cat2
+p['max_speed_e'] = max_speed_e  
+p['min_speed_e'] = min_speed_e 
+p['free_speed_e'] = free_speed_e  
 p['bat_e'] = bat_e 
 p['g'] = g
-p['mu'] = mu          # Rolling resistance
-p['m_a'] = m_a          # Airplane mass
+p['mu'] = mu                        # Rolling resistance
+p['m_a'] = m_a                      # Airplane mass
 p['eta'] = eta 
 p['eta_e'] = eta_e
 p['I_ch'] = I_ch 
