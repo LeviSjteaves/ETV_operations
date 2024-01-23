@@ -14,6 +14,8 @@ import seaborn as sns
 import sys
 import numpy as np
 import matplotlib.patches as mpatches
+
+
 #from Functions_basicprob import appeartimes
 from datetime import datetime
 
@@ -37,23 +39,26 @@ def Load_Graph(airport):
     
     elif airport == 'EHAM':
 
-        file_path = "EHAM_graph_hand.gpickle"
+        file_path1 = "EHAM_graph_hand_a.gpickle"
+        file_path2 = "EHAM_graph_hand_e.gpickle"
         
-        G_AMS_a = nx.read_gpickle(file_path)
+        G_AMS_a = nx.read_gpickle(file_path1)
+        G_AMS_e = nx.read_gpickle(file_path2)
+        
         G_a = G_AMS_a
-        G_e = G_AMS_a
-
+        G_e = G_AMS_e
+    
         # Set labels and title
         fig, ax = plt.subplots()
-        node_positions = nx.get_node_attributes(G_a, 'pos')
+        node_positions_a = nx.get_node_attributes(G_a, 'pos')
+        node_positions_e = nx.get_node_attributes(G_e, 'pos')
+
         img = plt.imread("schiphol_screenshot.png")  # Replace with the actual path to your screenshot
-        
-        gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
-                    'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':103, '22':98}
-        
+                
         ax.imshow(img, extent=[523390, 535640, 6818290, 6832400], alpha=0.8)  # Adjust the extent based on your graph size
         # Add nodes on top of the image
-        nx.draw(G_a, pos=node_positions, with_labels=True, node_size=25, font_size=12, ax=ax)
+        nx.draw(G_a, pos=node_positions_a, with_labels=True, node_size=25, font_size=12, ax=ax)
+        nx.draw(G_e, pos=node_positions_e, with_labels=True, node_color='red', node_size=25, font_size=12, ax=ax, edge_color='grey')
 
         
         ax.set_title('Schiphol airport (EHAM)')
@@ -70,7 +75,7 @@ def Load_Graph(airport):
 
     else:
         print("Select correct airport!")
-    return G_a, G_e, gate_runway_locs
+    return G_a, G_e
 
 def appeartimes(appear_times_T, date_of_interest):
     timestamp_format1 = "%Y-%m-%dT%H:%M:%S.%f%z"
@@ -183,26 +188,33 @@ def Load_Aircraft_Info(date_of_interest, pagelimit):
     
     return Flight_orig, Flight_dest, appear_times, dep, cat, flightdata
     
-def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep, cat):
+def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     model = grp.Model("Aircraft_Taxiing")
     #model.Params.NonConvex = 2
     # unpack P
     N_aircraft = p['N_aircraft']
     N_etvs = p['N_etvs']
+    N_etvs_cat1 = p['N_etvs_cat1']
+    #N_etvs_cat2 = p['N_etvs_cat2']
     max_speed_a = p['max_speed_a']
     min_speed_a = p['min_speed_a']
-    speed_e = p['speed_e']
+    max_speed_e = p['max_speed_e']
+    min_speed_e = p['min_speed_e']
+    free_speed_e = p['free_speed_e']
     bat_e = p['bat_e']
+    m_a = p['m_a']
     g = p['g']
     mu = p['mu']
-    m_a = p['m_a']
     eta = p['eta']
     eta_e =p['eta_e']
     I_ch = p['I_ch']
     E_e = p['E_e']
+    E_a = p['E_a']
     d_sep = p['d_sep']
     v_avg = p['v_avg']
     t_pushback = p['t_pushback']
+    T_charge_min = p['T_charge_min']
+    start_delay = p['start_delay']
     
     # Time definitions
     t_min = []
@@ -256,6 +268,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep, ca
                        e_col_ot = [a,b]
                        I_col_ot_nodes.append([P[a][n-1],P[a][n]])
                        I_col_ot.append(e_col_ot)
+                    
                        
     I_col_ho = [] #set of aircraft with possible head on collisions
     I_col_ho_nodes = []
@@ -263,15 +276,19 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep, ca
         for b in range(N_aircraft):
             for n in range(1, len(P[a])):
                 for m in range(len(P[b])-1):
-                    if a < b and P[a][n] == P[b][m] and P[a][n-1] == P[b][m+1]  and t_min[a][n] <= t_max[b][m]+start_delay and t_min[b][m+1] <= t_max[a][n-1]+start_delay:
+                    if a < b and n != 0 and m != len(P[b]) and P[a][n] == P[b][m] and P[a][n-1] == P[b][m+1]  and t_min[a][n] <= t_max[b][m]+start_delay and t_min[b][m+1] <= t_max[a][n-1]+start_delay:
                        e_col_ho = [a,b]
                        I_col_ho_nodes.append([P[a][n-1],P[a][n]])
-                       I_col_ho.append(e_col_ho)   
-                
+                       I_col_ho.append(e_col_ho) 
+            k=0
+            l=len(P[b])-1           
+            if a < b and P[a][k] == P[b][l]:
+              e_col_ho = [a,b]
+              I_col_ho_nodes.append([59,9])
+              I_col_ho.append(e_col_ho) 
+        
     # Decision variables
     t = {}  # Arrival times nodes
-    #t_div = {}
-    #t_div1 = {}
     Z = {}  # Order of visiting nodes
     X = {}  # Last towed aircraft of an ETV
     O = {}  # Order for towing tasks
@@ -279,8 +296,6 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep, ca
     E = {}  # State of charge before every task
     
     for a in range(N_aircraft):
-        #t_div[a] = model.addVar(lb=0, ub=100000, vtype=GRB.CONTINUOUS, name=f"t_div_{a}_{n}")
-        #t_div1[a] = model.addVar(lb=0, ub=100000, vtype=GRB.CONTINUOUS, name=f"t_div_{a}_{n}")
         for n in range(len(P[a])):
             t[a, n] = model.addVar(lb=0, vtype=GRB.CONTINUOUS, name=f"t_{a}_{n}")
             
@@ -299,18 +314,15 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep, ca
                
     for a in range(N_aircraft):
        for i in range(N_etvs):           
-              E[i, a] = model.addVar(lb=0.2*bat_e, vtype=GRB.CONTINUOUS, name=f"E_{i}_{a}") 
+              E[i, a] = model.addVar(lb=0.2*bat_e[i], vtype=GRB.CONTINUOUS, name=f"E_{i}_{a}") 
               
     for a in range(N_aircraft):
        for i in range(N_etvs):          
               C[i,a] = model.addVar(vtype=GRB.BINARY, name=f"C_{i}_{a}")
            
     # Objective function: minimize emissions (only rolling resistance) + total taxitime
-    model.setObjective(#grp.quicksum(mu*m_a[cat[a]]*g*d_a[a]*eta*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))) for a in range(N_aircraft)) 
-                       #grp.quicksum((t_div[a]*d_a[a]*0.1964)*m_a[cat[a]]*t_div1[a] for a in range(N_aircraft))
-                       grp.quicksum(2.75*m_a[cat[a]]*(t[a,len(P[a])-1]-(t[a,0]))*(1/eta)*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs))) for a in range(N_aircraft))
+    model.setObjective(grp.quicksum(mu*m_a[cat[a]]*g*d_a[a]*eta*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))) for a in range(N_aircraft)) 
                        +1*grp.quicksum((t[a,len(P[a])-1]) for a in range(N_aircraft))
-                       #-0.01*grp.quicksum(E[i,a] for a in range(N_aircraft) for i in range(N_etvs))
                        , sense=GRB.MINIMIZE)
     
     # Constraints////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -318,15 +330,25 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep, ca
         #Min start time
         model.addConstr(t[a, 0] >= tO_a[a]+t_pushback*dep[a], f"appear_constraint_{a}")
         model.addConstr(t[a, 0] <= tO_a[a]+start_delay+t_pushback*dep[a], f"appear_constraint_{a}")
-        #model.addConstr((t[a,len(P[a])-1]-(t[a,0])) * t_div[a] == 1) # constraint to divide by (t_end-t0) making it non-convex
         
         # max one etv per aircraft
         model.addConstr(grp.quicksum(X[a, i] +grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs)) <= 1, f"one_towing_task_{a}")
         for n in range(1, len(P[a])):
             #Min/max time to arrive at each node (from min/max speed)
-            model.addConstr(t[a, n] >= t[a, n-1] + Short_path_dist(G_a, P[a][n-1], P[a][n]) / max_speed_a, f"arrival_constraint_min_{a}_{n}")
-            model.addConstr(t[a, n] <= t[a, n-1] + Short_path_dist(G_a, P[a][n-1], P[a][n]) / min_speed_a, f"arrival_constraint_max_{a}_{n}")            
-            
+            model.addConstr(t[a, n] >= t[a, n-1] + (Short_path_dist(G_a, P[a][n-1], P[a][n]) / max_speed_a) - (grp.quicksum(X[a, i] +grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))*10000), f"arrival_constraint_min_{a}_{n}")
+            model.addConstr(t[a, n] <= t[a, n-1] + (Short_path_dist(G_a, P[a][n-1], P[a][n]) / min_speed_a) + (grp.quicksum(X[a, i] +grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))*10000), f"arrival_constraint_max_{a}_{n}")            
+            #Min/max time to arrive at each node while towed (from min/max speed)
+            model.addConstr(t[a, n] >= t[a, n-1] + (Short_path_dist(G_a, P[a][n-1], P[a][n]) / max_speed_e) - (1 - (grp.quicksum(X[a, i] +grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))))*10000, f"arrival_constraint_min_tow_{a}_{n}")
+            model.addConstr(t[a, n] <= t[a, n-1] + (Short_path_dist(G_a, P[a][n-1], P[a][n]) / min_speed_e) + (1 - (grp.quicksum(X[a, i] +grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))))*10000, f"arrival_constraint_max_tow_{a}_{n}")            
+    
+    # Weight categories
+    for a in range(N_aircraft):        
+        for i in range(N_etvs):
+            if cat[a]>=5 and i<=N_etvs_cat1-1:
+                model.addConstr(X[a, i] == 0)
+                for b in range(len(I_up[a])):
+                    model.addConstr(O[a,I_up[a][b],i] == 0)
+               
     # Collision
     for n in range(len(I_col_nodes)):
             model.addConstr((Z[n] == 1) >> (t[I_col[n][0],P[I_col[n][0]].index(I_col_nodes[n])] <= t[I_col[n][1],P[I_col[n][1]].index(I_col_nodes[n])]), f"auxiliary_order1_node_{n}")   
@@ -338,12 +360,12 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep, ca
         idx_aircraftpairs = [i for i, sublist in enumerate(I_col) if sublist == I_col_ho[n]]
         for i in range(len(idx_aircraftpairs)-1):
             model.addConstr(Z[idx_aircraftpairs[i]]-Z[idx_aircraftpairs[i+1]] == 0, f"collision_headon_node_{n}")
-            
+                
     for n in range(len(I_col_ot_nodes)):  
         idx_aircraftpairs = [i for i, sublist in enumerate(I_col) if sublist == I_col_ot[n]]
         for i in range(len(idx_aircraftpairs)-1):
             model.addConstr(Z[idx_aircraftpairs[i]]-Z[idx_aircraftpairs[i+1]] == 0, f"collision_headon_node_{n}")
-        
+            
     #Ordering of tasks
     for i in range(N_etvs):
         model.addConstr(grp.quicksum(X[a,i] for a in range(N_aircraft)) <= 1)
@@ -353,8 +375,8 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep, ca
             model.addConstr(X[a,i] + grp.quicksum(O[a,I_up[a][l],i] for l in range(len(I_up[a]))) <= 1, f"available_etv_constraint_{a}_{b}_{i}")
             for b in range(len(I_up[a])):
                 if a!=I_up[a][b]:
-                    model.addConstr((O[a,I_up[a][b],i] == 1) >> (t[I_up[a][b],0] >= t[a,len(P[a])-1] + Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / speed_e), f"auxiliary_task_{a}_{b}_{i}")   
-                    model.addConstr((O[a,I_up[a][b],i] == 1) >> (t[I_up[a][b],0] >= t[a,len(P[a])-1] + (Short_path_dist(G_e, D_a[a], dock[0])+Short_path_dist(G_e, dock[0], O_a[I_up[a][b]])) / speed_e -(1-C[i,a])*10000), f"auxiliary_task_{a}_{b}_{i}")   
+                    model.addConstr((O[a,I_up[a][b],i] == 1) >> (t[I_up[a][b],0] >= t[a,len(P[a])-1] + Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / free_speed_e), f"auxiliary_task_{a}_{b}_{i}")   
+                    model.addConstr((O[a,I_up[a][b],i] == 1) >> (t[I_up[a][b],0] >= t[a,len(P[a])-1] + (Short_path_dist(G_e, D_a[a], dock[0])+Short_path_dist(G_e, dock[0], O_a[I_up[a][b]])) / free_speed_e  +T_charge_min -(1-C[i,a])*10000), f"auxiliary_task_{a}_{b}_{i}")   
                     model.addConstr((O[a,I_up[a][b],i] == 1) >> (grp.quicksum(O[I_up[a][b],I_up[I_up[a][b]][k] ,i] for k in range(len(I_up[I_up[a][b]])))+X[I_up[a][b],i] >=1 ))
                 if a == I_up[a][b]:  
                     model.addConstr(O[a,I_up[a][b],i] == 0)
@@ -363,29 +385,37 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, start_delay, dep, ca
     for i in range(N_etvs): 
         for a in range(N_aircraft):
             for b in range(len(I_up[a])): 
-                #model.addConstr(t_div1[a] == (t[a,len(P[a])-1]-(tO_a[a]))*(1-X[a,i] + O[a,I_up[a][b],i])) # 2nd order constraint bc of 3th order objective
                 if a!=I_up[a][b]:
-                    #model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(mu*m_a[cat[a]]*g*d_a[a]*eta_e+ (Short_path_dist(G_e, D_a[a], dock[0])+Short_path_dist(G_e, dock[0], O_a[I_up[a][b]]))*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / speed_e))*I_ch))+(1-(O[a,I_up[a][b],i]))*bat_e*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
-                    #model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] <= E[i, a]-(mu*m_a[cat[a]]*g*d_a[a]*eta_e+ Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*E_e)+(1-(O[a,I_up[a][b],i]))*bat_e*1000), f"available_etv_constraint2_{a}_{b}_{i}")   
-                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(2.75*m_a[cat[a]]*(t[a,len(P[a])-1]-(t[a,0]))*(1/eta_e)+ (Short_path_dist(G_e, D_a[a], dock[0])+Short_path_dist(G_e, dock[0], O_a[I_up[a][b]]))*E_e-(((t[I_up[a][b],0]-t[a,len(P[a])-1]+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / speed_e))*I_ch))+(1-(O[a,I_up[a][b],i]))*bat_e*10), f"available_etv_constraint1_{a}_{b}_{i}")   
-                    model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] <= E[i, a]-(2.75*m_a[cat[a]]*(t[a,len(P[a])-1]-(t[a,0]))*(1/eta_e)+ Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*E_e)+(1-(O[a,I_up[a][b],i]))*bat_e*10), f"available_etv_constraint2_{a}_{b}_{i}")   
-                    
+                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e)+ (Short_path_dist(G_e, D_a[a], dock[0])+Short_path_dist(G_e, dock[0], O_a[I_up[a][b]]))*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / free_speed_e))*I_ch))+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
+                    model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] <= E[i, a]-(mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e)+ Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*E_e)+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint2_{a}_{b}_{i}")   
+                                           
     # ETV energy availability
     for i in range(N_etvs): 
         for a in range(N_aircraft):
-            model.addConstr((X[a,i] == 1) >> (E[i, a] >= (2.75*m_a[cat[a]]*(t[a,len(P[a])-1]-(t[a,0]))*(1/eta_e)+Short_path_dist(G_e, D_a[a], dock[0])*(E_e))+0.2*bat_e))#return to C (charge dock)
-            model.addConstr(E[i, a] <=  0.9*bat_e,  f"max_cap_{i}_{a}")
+            model.addConstr((X[a,i] == 1) >> (E[i, a] >= (mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e)+Short_path_dist(G_e, D_a[a], dock[0])*(E_e))+0.2*bat_e[i]))#return to C (charge dock)
+            model.addConstr(E[i, a] <=  0.9*bat_e[i],  f"max_cap_{i}_{a}")
             for b in range(len(I_up[a])): 
-                model.addConstr((O[a,I_up[a][b],i] == 1) >> (E[i, a] >= (2.75*m_a[cat[a]]*(t[a,len(P[a])-1]-(t[a,0]))*(1/eta_e)+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*(E_e))+ 0.2*bat_e))
+                model.addConstr((O[a,I_up[a][b],i] == 1) >> (E[i, a] >= (mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e)+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*(E_e))+ 0.2*bat_e[i]))
     
     model.update()
-    return model, I_up, I_do
+    return model, I_up, I_do, I_col_ho, I_col_ot, I_col, I_col_ho_nodes
 
 def Short_path_dist(G, n1, n2):
     dist = nx.shortest_path_length(G, source=n1, target=n2, weight='weight')
     return dist
 
-def Plotting(variable_values, N_aircraft, N_etvs, P, bat_e, I_up, p, d_a, appear_times, G_a, cat):
+def Plotting(variable_values, N_aircraft, N_etvs, P, I_up, p, d_a, appear_times, G_a, cat):
+    # unpack P
+    N_aircraft = p['N_aircraft']
+    N_etvs = p['N_etvs']
+    bat_e = p['bat_e']
+    m_a = p['m_a']
+    g = p['g']
+    mu = p['mu']
+    eta_e = p['eta_e']
+    max_speed_a = p['max_speed_a']
+    start_delay = p['start_delay']
+    
     colors = sns.color_palette('husl', n_colors=N_etvs)
     etv_color = []
     etv_number = []
@@ -404,26 +434,28 @@ def Plotting(variable_values, N_aircraft, N_etvs, P, bat_e, I_up, p, d_a, appear
     # Create a figure and axis
     fig, ax = plt.subplots()
     ax.grid(True, which='both', linestyle='--', linewidth=0.5, color='gray')
-
+    durations = []
     # Iterate through aircraft and tasks to plot horizontal bars
     for a in range(N_aircraft): 
             start_time = variable_values['t'][a][0]
             duration = variable_values['t'][a][len(P[a])-1] - start_time
             ax.barh(a, duration/60, left=start_time/60, color=etv_color[a])
             ax.plot(appear_times[a]/60, a, 'go', markersize=10)
-            for n in range(1, len(variable_values['t'][a])):
+            durations.append(duration)
+            for n in range(len(variable_values['t'][a])):
                 node_number= P[a][n]
                 ax.text(variable_values['t'][a][n]/60, a, str(node_number), color='black',
                     ha='center', va='center', fontweight='bold', fontsize= 7)
-                ax.plot(variable_values['t'][a][n]/60, a-1+(Short_path_dist(G_a, P[a][n-1], P[a][n])/(variable_values['t'][a][n]-variable_values['t'][a][n-1]))/10, 'go', markersize=5)
-    
+                if n >= 1:
+                    ax.plot(variable_values['t'][a][n]/60, a-1+(Short_path_dist(G_a, P[a][n-1], P[a][n])/(variable_values['t'][a][n]-variable_values['t'][a][n-1]))/max_speed_a, 'go', markersize=5)
+    appear_times_min = []
     for i in range(len(appear_times)):
-        appear_times[i] /= 60
-        appear_times[i] = int(appear_times[i]) 
+        appear_times_min.append(int(appear_times[i]/60))
+        
 
     
     # Set a reasonable number of tick locations based on the range of total minutes
-    tick_locations = np.linspace(min(appear_times), max(appear_times),20)
+    tick_locations = np.linspace(min(appear_times_min), max(appear_times_min)+max(durations)/60+start_delay/60,20)
     hours, remainder = (divmod(tick_locations, 60))
     timestamps = [f'{int(h):02d}:{int(r):02d}' for h, r in zip(hours, remainder)]
     
@@ -463,7 +495,7 @@ def Plotting(variable_values, N_aircraft, N_etvs, P, bat_e, I_up, p, d_a, appear
                 ax.barh(etv_number[a], duration/60, left=start_time/60, color='grey')
                 ax.text((start_time+0.5*duration)/60, etv_number[a], f'{a+1}', color='black',
                     ha='center', va='center', fontsize= 8)
-
+                        
     # Set labels and title
     ax.set_xlabel('Time [h]')
     plt.xticks(tick_locations, timestamps, rotation=45, ha='right')
@@ -478,33 +510,26 @@ def Plotting(variable_values, N_aircraft, N_etvs, P, bat_e, I_up, p, d_a, appear
     green_patch = mpatches.Patch(color='green', label='Charge-Indicator')
     ax.legend(handles=[blue_patch, red_patch, grey_patch, green_patch], loc='upper left')
 
-    # unpack P
-    N_aircraft = p['N_aircraft']
-    N_etvs = p['N_etvs']
-    bat_e = p['bat_e']
-    g = p['g']
-    mu = p['mu']
-    m_a = p['m_a']
-    eta_e = p['eta_e']
+
         #etv_SOC.append(G_SOC)
     for i in range(N_etvs):
         for a in range(N_aircraft):
                 if variable_values['X'][a][i] == 1:
-                    ax.bar(variable_values['t'][a][0]/60, variable_values['E'][i][a]/bat_e, bottom=etv_number[a]-0.5, width=2, color='red')
-                    ax.text(variable_values['t'][a][0]/60, etv_number[a]-0.5+variable_values['E'][i][a]/bat_e, round(variable_values['E'][i][a]/bat_e,2), color='black',
+                    ax.bar(variable_values['t'][a][0]/60, variable_values['E'][i][a]/bat_e[i], bottom=etv_number[a]-0.5, width=2, color='red')
+                    ax.text(variable_values['t'][a][0]/60, etv_number[a]-0.5+variable_values['E'][i][a]/bat_e[i], round(variable_values['E'][i][a]/bat_e[i],2), color='black',
                         ha='center', va='center', fontweight='normal', fontsize= 7)
                     
-                    ax.bar(variable_values['t'][a][len(P[a])-1]/60, (variable_values['E'][i][a]-(2.75*m_a[cat[a]]*(variable_values['t'][a][len(P[a])-1]-variable_values['t'][a][0])*(1/eta_e)))/bat_e, bottom=etv_number[a]-0.5,width=2,  color='red')
-                    ax.text(variable_values['t'][a][len(P[a])-1]/60, etv_number[a]-0.5+(variable_values['E'][i][a]-(2.75*m_a[cat[a]]*(variable_values['t'][a][len(P[a])-1]-(variable_values['t'][a][0])))*(1/eta_e))/bat_e, round((variable_values['E'][i][a]-(2.75*m_a[cat[a]]*(variable_values['t'][a][len(P[a])-1]-(variable_values['t'][a][0]))*(1/eta_e)))/bat_e,2), color='black',
+                    ax.bar(variable_values['t'][a][len(P[a])-1]/60, (variable_values['E'][i][a]-(mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e)))/bat_e[i], bottom=etv_number[a]-0.5,width=2,  color='red')
+                    ax.text(variable_values['t'][a][len(P[a])-1]/60, etv_number[a]-0.5+variable_values['E'][i][a]-(mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e))/bat_e[i], round((variable_values['E'][i][a]-(mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e)))/bat_e[i],2), color='black',
                             ha='center', va='center', fontweight='normal', fontsize= 7)
                 for b in range(len(I_up[a])): 
                     if variable_values['O'][a][I_up[a][b]][i] == 1: 
-                        ax.bar(variable_values['t'][a][0]/60, variable_values['E'][i][a]/bat_e, bottom=etv_number[a]-0.5, width=2, color='red')
-                        ax.text(variable_values['t'][a][0]/60, etv_number[a]-0.5+variable_values['E'][i][a]/bat_e, round(variable_values['E'][i][a]/bat_e,2), color='black',
+                        ax.bar(variable_values['t'][a][0]/60, variable_values['E'][i][a]/bat_e[i], bottom=etv_number[a]-0.5, width=2, color='red')
+                        ax.text(variable_values['t'][a][0]/60, etv_number[a]-0.5+variable_values['E'][i][a]/bat_e[i], round(variable_values['E'][i][a]/bat_e[i],2), color='black',
                             ha='center', va='center', fontweight='normal', fontsize= 7)
                         
-                        ax.bar(variable_values['t'][a][len(P[a])-1]/60, (variable_values['E'][i][a]-(2.75*m_a[cat[a]]*(variable_values['t'][a][len(P[a])-1]-variable_values['t'][a][0])*(1/eta_e)))/bat_e, bottom=etv_number[a]-0.5,width=2,  color='red')
-                        ax.text(variable_values['t'][a][len(P[a])-1]/60, etv_number[a]-0.5+(variable_values['E'][i][a]-(2.75*m_a[cat[a]]*(variable_values['t'][a][len(P[a])-1]-(variable_values['t'][a][0])))*(1/eta_e))/bat_e, round((variable_values['E'][i][a]-(2.75*m_a[cat[a]]*(variable_values['t'][a][len(P[a])-1]-(variable_values['t'][a][0]))*(1/eta_e)))/bat_e,2), color='black',
+                        ax.bar(variable_values['t'][a][len(P[a])-1]/60, (variable_values['E'][i][a]-(mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e)))/bat_e[i], bottom=etv_number[a]-0.5,width=2,  color='red')
+                        ax.text(variable_values['t'][a][len(P[a])-1]/60, etv_number[a]-0.5+variable_values['E'][i][a]-(mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e))/bat_e[i], round((variable_values['E'][i][a]-(mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e)))/bat_e[i],2), color='black',
                                 ha='center', va='center', fontweight='normal', fontsize= 7)
     
     # Create a figure and axis
