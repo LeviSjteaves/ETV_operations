@@ -10,6 +10,7 @@ Created on Fri Nov 17 11:17:48 2023
 from gurobipy import GRB
 import networkx as nx
 from importlib import import_module
+import sys
 
 #model 1 for time-dep energycons. 
 #model 2 for dist-dep energycons.
@@ -30,35 +31,36 @@ plt.close('all')
 #Choose from: basic:'basic', Eindhoven:'EHEH', Schiphol: 'EHAM'
 airport = 'EHAM'
 #Choose from: Manually insert flight info:'manual', use Schiphol flight API:'API', import saved document 'saved' 
-setting = 'API'
+setting = 'saved'
     
  
 # Parameters
 g=9.81
 # Aircraft parameters
 max_speed_a = 16.6      # Max aircraft velocity
-min_speed_a = 1    # Min aircraft velocity
+min_speed_a = 1         # Min aircraft velocity
 max_speed_e = 8.9
 min_speed_e = 1
 free_speed_e = 8.9
-start_delay = 50   # Max allowed start delay ('start taxi time' - 'appear time') in seconds
-mu = 0.02            # Rolling resistance
-m_a = [50000, 50000, 50000, 80000, 80000, 80000, 300000, 300000, 300000, 300000]        # Airplane mass
+start_delay = 900   # Max allowed start delay ('start taxi time' - 'appear time') in seconds
+mu = 0.5            # Rolling resistance
+m_a = [10000, 20000, 45000, 70000, 120000, 180000, 240000, 300000, 380000, 450000]        # Airplane mass
+fuelmass = [2000, 4000, 10000, 26000, 42000, 65000, 100000, 130000, 250000, 280000]
 eta = 0.3            # Turbine efficiency
-dock = [133]           # Node corresponding to charging dock
-#dock = [26]  
+dock = [143,110]           # Node corresponding to charging dock  
 N_etvs_cat1 = 1     # Number of ETVs of category 1
 N_etvs_cat2 = 0     # Number of ETVs of category 2
-bat_e1 = 576000000
-bat_e2 = 864000000      #battery capacity \Joule
+bat_e1 = 576*10**6
+bat_e2 = 864*10**6      #battery capacity \Joule
 eta_e = 0.9
 I_ch = 220000 # Joule/second     
-E_e = 1250# etvs energy consumption joule per unit distance[m]
-E_a = 2# aircrafts energy consumption joule per kg per unit time[s]
+E_e = 33000 # etvs energy consumption joule per unit distance[m]
+E_a = 3.26 # aircrafts energy consumption joule per kg per unit time[s]
 d_sep = [22, 28, 37, 45, 49, 55, 72, 76, 77, 84]
 v_avg = 8.9
 t_pushback = 60 #pushback time in seconds
 T_charge_min = 60 #min charging time in seconds
+e_KE = 43.1*10**6
 
 # Load aircraft info
 N_etvs = N_etvs_cat1+N_etvs_cat2
@@ -84,24 +86,28 @@ if setting == 'manual':
    
 elif setting == 'API':
     date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
-    pagelimit = [20,20]                   #Specify the amount of pages of data
+    pagelimit = [20,20]                   #Specify the amount of pages of data [-1] for last page
     
     Flight_orig, Flight_dest, appear_times, dep, cat, flightdata = Load_Aircraft_Info(date_of_interest, pagelimit)
     
     tO_a = appear_times
     gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
-                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':108, '22':98}
+                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':108, '22':98, 'HG':98}
     
     for i in range(len(Flight_orig)):
         O_a.append(gate_runway_locs.get(Flight_orig[i]))   # Origins
         D_a.append(gate_runway_locs.get(Flight_dest[i]))   # Destinations
     
-    #N_aircraft = 5# Number of aircraft
-    N_aircraft = len(O_a)# Number of aircraft
+    if None in O_a or None in D_a:
+        print('Check if all used runways are saved in gate_runway_locs')
+        sys.exit()
+        
+    N_aircraft = 8# Number of aircraft
+    #N_aircraft = len(O_a)# Number of aircraft
     
 elif setting == 'saved':
     gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
-                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':108, '22':98}
+                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':108, '22':98, 'HG':98}
     
     tO_a = np.load('Flight_t.npy')
     appear_times = tO_a
@@ -114,8 +120,8 @@ elif setting == 'saved':
         O_a.append(gate_runway_locs.get(Flight_orig[i]))   # Origins
         D_a.append(gate_runway_locs.get(Flight_dest[i]))   # Destinations
     
-    N_aircraft = 5# Number of aircraft
-    #N_aircraft = len(O_a)# Number of aircraft
+    #N_aircraft = 2# Number of aircraft
+    N_aircraft = len(O_a)# Number of aircraft
 else:
     print("Please specify the method to get flight info")   
 
@@ -126,7 +132,7 @@ p['max_speed_a'] = max_speed_a      # Max aircraft velocity
 p['min_speed_a'] = min_speed_a 
 p['N_etvs'] = N_etvs                # Number of ETVs
 p['N_etvs_cat1'] = N_etvs_cat1
-#p['N_etvs_cat2'] = N_etvs_cat2
+p['N_etvs_cat2'] = N_etvs_cat2
 p['max_speed_e'] = max_speed_e  
 p['min_speed_e'] = min_speed_e 
 p['free_speed_e'] = free_speed_e  
@@ -144,6 +150,8 @@ p['v_avg'] = v_avg
 p['t_pushback'] = t_pushback
 p['T_charge_min'] = T_charge_min
 p['start_delay'] = start_delay
+p['e_KE'] = e_KE
+p['fuelmass'] = fuelmass
 
 # Aircraft routing
 N_Va = []
@@ -158,7 +166,7 @@ for a in range(N_aircraft):
     
 print("DATA EXTRACTED")
 # Create the Gurobi model
-model, I_up, I_do, I_col_ho, I_col_ot, I_col, I_col_ho_nodes = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat)
+model, I_up, I_do = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat)
 
 print("MODEL CREATED")
 # Optimize the model
@@ -188,6 +196,11 @@ if model.status == GRB.OPTIMAL:
     print("Optimal objective value:", model.objVal)
 else:
     print("No optimal solution found.")
+    
+    
+Kg_kerosene = ((model.objVal-sum((variable_values['t'][a][len(P[a])-1]) for a in range(N_aircraft)))/e_KE)*100/76
+Costs_etvs = int(1*10**6*N_etvs_cat1+1.5*10**6*N_etvs_cat2)
+
 
 for a in range(N_aircraft):
    for i in range(N_etvs): 
@@ -198,7 +211,9 @@ for a in range(N_aircraft):
                 print(f"{'O'}_{a}_{I_up[a][b]}_{i}")
                 
     
-colors_air, etv_color = Plotting(variable_values, N_aircraft, N_etvs, P, I_up, p, d_a,  appear_times, G_a, cat)                 
+Plotting(variable_values, N_aircraft, N_etvs, P, I_up, p, d_a,  appear_times, G_a, cat, dep)                 
          
-    
+print(f"KG Kerosene: {Kg_kerosene}")
+print(f"ETV costs: \N{euro sign}{Costs_etvs},-")
+
     

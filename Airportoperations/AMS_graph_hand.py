@@ -160,6 +160,8 @@ node_coordinates = {
     106: (52.29412728967028, 4.755848910753563),
     107: (52.29213959519698, 4.752199051498203),
     108: (52.30483836782026, 4.7778764032013985),
+    155: (52.33467399894124, 4.7364683256413835),
+    156: (52.3342652888607, 4.744610016781785),
     
 }
 node_coordinates_e = {
@@ -194,7 +196,7 @@ node_coordinates_e = {
     115: (52.30378777611243, 4.759876904488094),
     116: (52.30545043196897, 4.761589008791205),
     117: (52.306796387471366, 4.765137224277812),
-    118: (52.30852129144406, 4.769689828393795),
+    118: (52.308660311457956, 4.765606592937114),
     119: (52.310254400582814, 4.765358335553927),
     120: (52.31169629503089, 4.762268433029724),
     121: (52.31155113882058, 4.757514329133435),
@@ -237,8 +239,8 @@ node_coordinates_e = {
 edges = [(1, 5, True),
          (2, 5, True), (5, 6, True), (3, 6, True), (4, 7, True), (6, 7, True),
          (7, 8, False), (9, 7, False), (8, 10, False), (10, 9, False), (10, 11, True),
-         (11, 12, True), (11, 13, True), (12, 14, True), (14, 15, True), (15, 16, True),
-         (15, 17, True), (22, 23, True), 
+         (11, 12, True), (11, 155, True), (12, 14, True), (14, 15, True), (15, 16, True),
+         (15, 17, True), (22, 23, True), (155, 156, True), (156, 13, True),
          (23, 24, False), (24, 31, False), (31, 25, False), (25, 26, False),
          (26, 27, False), (27, 28, False), (28, 29, False), (29, 30, False),
          (21, 24, True), (20, 25, True), (19, 27, True), (19, 28, True), (18, 29, True),
@@ -290,7 +292,7 @@ node_positions = nx.get_node_attributes(airport_graph, 'pos')
 node_positions_e = nx.get_node_attributes(airport_graph_e, 'pos')
 
 fig, ax = plt.subplots()
-#nx.draw(airport_graph, pos=node_positions, with_labels=True, node_size= 25, font_size= 12)
+nx.draw(airport_graph, pos=node_positions, with_labels=True, node_size= 25, font_size= 12)
 nx.draw(airport_graph_e, pos=node_positions_e, with_labels=True, node_color='red',  node_size= 25, font_size= 12, edge_color='grey')
 
 # Save the MultiGraph to a file

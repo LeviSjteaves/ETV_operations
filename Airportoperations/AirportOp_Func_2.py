@@ -321,7 +321,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
               C[i,a] = model.addVar(vtype=GRB.BINARY, name=f"C_{i}_{a}")
            
     # Objective function: minimize emissions (only rolling resistance) + total taxitime
-    model.setObjective(grp.quicksum(mu*m_a[cat[a]]*g*d_a[a]*eta*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))) for a in range(N_aircraft)) 
+    model.setObjective(grp.quicksum(mu*m_a[cat[a]]*g*d_a[a]*(1/eta)*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))) for a in range(N_aircraft)) 
                        +1*grp.quicksum((t[a,len(P[a])-1]) for a in range(N_aircraft))
                        , sense=GRB.MINIMIZE)
     
@@ -398,7 +398,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                 model.addConstr((O[a,I_up[a][b],i] == 1) >> (E[i, a] >= (mu*m_a[cat[a]]*g*d_a[a]*(1/eta_e)+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*(E_e))+ 0.2*bat_e[i]))
     
     model.update()
-    return model, I_up, I_do, I_col_ho, I_col_ot, I_col, I_col_ho_nodes
+    return model, I_up, I_do
 
 def Short_path_dist(G, n1, n2):
     dist = nx.shortest_path_length(G, source=n1, target=n2, weight='weight')
