@@ -54,7 +54,7 @@ def Load_Graph(airport):
 
         img = plt.imread("EHAM_chart.png")  # Replace with the actual path to your screenshot
         
-        ax.imshow(img, extent=[523740, 536000, 6817050, 6833160], alpha=0.8)  # Adjust the extent based on your graph size
+        ax.imshow(img, extent=[107000, 108000, 483000, 484000], alpha=0.8)  # Adjust the extent based on your graph size
         
         # Add nodes on top of the image
         nx.draw(G_a, pos=node_positions_a, with_labels=True, node_size=15, font_size=8, ax=ax)
@@ -328,7 +328,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                
     for a in range(N_aircraft):
        for i in range(N_etvs):           
-              E[i, a] = model.addVar(lb=0.2*bat_e[i], vtype=GRB.CONTINUOUS, name=f"E_{i}_{a}") 
+              E[i, a] = model.addVar(lb=bat_e_min[i], ub=bat_e_max[i], vtype=GRB.CONTINUOUS, name=f"E_{i}_{a}") 
               
     for a in range(N_aircraft):
        for i in range(N_etvs):          
@@ -402,7 +402,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
         for a in range(N_aircraft):
             for b in range(len(I_up[a])): 
                 if a!=I_up[a][b]:
-                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_time[a]*(t[a,len(P[a])-1]-(t[a,0]))+ (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock))) )*E_e-(((t[I_up[a][b],0]-(t[a,len(P[a])-1]+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])) / free_speed_e))*I_ch))+(1-(O[a,I_up[a][b],i]))*bat_e[i]*10), f"available_etv_constraint1_{a}_{b}_{i}")   
+                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_time[a]*(t[a,len(P[a])-1]-(t[a,0]))+ (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock))) )*E_e-(((t[I_up[a][b],0]-(t[a,len(P[a])-1]+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]))/free_speed_e))*I_ch))+(1-(O[a,I_up[a][b],i]))*bat_e[i]*10), f"available_etv_constraint1_{a}_{b}_{i}")   
                     model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_time[a]*(t[a,len(P[a])-1]-(t[a,0]))+ Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*E_e)+(1-(O[a,I_up[a][b],i]))*bat_e[i]*10), f"available_etv_constraint2_{a}_{b}_{i}")   
                     
     # ETV energy availability

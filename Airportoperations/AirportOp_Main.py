@@ -49,14 +49,14 @@ m_a = [10, 20, 45, 70, 120, 180, 240, 300, 380, 450]        # Airplane mass in t
 fuelmass = [2, 4, 10, 26, 42, 65, 100, 130, 250, 280]       # fuel mass in tons
 eta = 0.3            # Turbine efficiency
 dock = [143,110,119]           # Node corresponding to charging dock  
-N_etvs_cat1 = 2     # Number of ETVs of category 1
-N_etvs_cat2 = 1     # Number of ETVs of category 2
+N_etvs_cat1 = 3     # Number of ETVs of category 1
+N_etvs_cat2 = 2     # Number of ETVs of category 2
 bat_e1 = 576      #battery capacity \MJoule
 bat_e2 = 864      #battery capacity \MJoule
 eta_e = 0.9
-I_ch = 13.2 # MJoule/min     
-E_e = 0.033 # etvs energy consumption Mjoule per unit distance[m]
-E_a = 0.00326 # aircrafts energy consumption Kjoule per kg per unit time[s]
+I_ch = 1.32 # MJoule/min     
+E_e = 0.0039 # etvs energy consumption Mjoule per unit distance[m]
+E_a = 0.00175 # aircrafts energy consumption Kjoule per kg per unit time[s]
 d_sep = [22, 28, 37, 45, 49, 55, 72, 76, 77, 84]
 v_avg = 534
 t_pushback = 1 #pushback time in seconds
@@ -94,7 +94,7 @@ if setting == 'manual':
    
 elif setting == 'API':
     date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
-    pagelimit = [20,20]                   #Specify the amount of pages of data [-1] for last page
+    pagelimit = [20,21]                   #Specify the amount of pages of data [-1] for last page
     
     Flight_orig, Flight_dest, appear_times, dep, cat, flightdata = Load_Aircraft_Info(date_of_interest, pagelimit)
     

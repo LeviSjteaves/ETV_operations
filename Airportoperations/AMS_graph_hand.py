@@ -16,14 +16,14 @@ def calculate_distance(coord1, coord2):
 
 def translate_coordinates_to_meters(node_coordinates):
     in_crs = CRS('epsg:4326')  # WGS 84
-    out_crs = CRS('epsg:3395')  # Web Mercator
+    out_crs = CRS('epsg:28992')  # Web Mercator
 
     transformer = Transformer.from_crs(in_crs, out_crs)
-
+    
     for node, (lat, lon) in node_coordinates.items():
         x, y = transformer.transform(lat, lon)
         node_coordinates[node] = (x, y)
-                
+         
         
 
 def create_airport_graph(node_coordinates, edges):
