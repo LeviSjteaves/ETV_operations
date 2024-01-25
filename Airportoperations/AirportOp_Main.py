@@ -20,6 +20,7 @@ Load_Aircraft_Info = module.Load_Aircraft_Info
 Create_model = module.Create_model
 Plotting = module.Plotting
 Load_Graph = module.Load_Graph
+Short_path_dist = module.Short_path_dist
 
 #from f'AirportOp_Func_{M}' import Load_Aircraft_Info
 import numpy as np
@@ -31,44 +32,51 @@ plt.close('all')
 #Choose from: basic:'basic', Eindhoven:'EHEH', Schiphol: 'EHAM'
 airport = 'EHAM'
 #Choose from: Manually insert flight info:'manual', use Schiphol flight API:'API', import saved document 'saved' 
-setting = 'saved'
+setting = 'API'
     
  
 # Parameters
 g=9.81
 # Aircraft parameters
-max_speed_a = 16.6      # Max aircraft velocity
-min_speed_a = 1         # Min aircraft velocity
-max_speed_e = 8.9
-min_speed_e = 1
-free_speed_e = 8.9
-start_delay = 900   # Max allowed start delay ('start taxi time' - 'appear time') in seconds
-mu = 0.5            # Rolling resistance
-m_a = [10000, 20000, 45000, 70000, 120000, 180000, 240000, 300000, 380000, 450000]        # Airplane mass
-fuelmass = [2000, 4000, 10000, 26000, 42000, 65000, 100000, 130000, 250000, 280000]
+max_speed_a = 996      # Max aircraft velocity m/min
+min_speed_a = 60         # Min aircraft velocity m/min
+max_speed_e = 534           #m/min
+min_speed_e = 60            #m/min
+free_speed_e = 534          #m/min
+start_delay = 15   # Max allowed start delay ('start taxi time' - 'appear time') in minutes
+mu = 0.02            # Rolling resistance
+m_a = [10, 20, 45, 70, 120, 180, 240, 300, 380, 450]        # Airplane mass in tons
+fuelmass = [2, 4, 10, 26, 42, 65, 100, 130, 250, 280]       # fuel mass in tons
 eta = 0.3            # Turbine efficiency
-dock = [143,110]           # Node corresponding to charging dock  
-N_etvs_cat1 = 1     # Number of ETVs of category 1
-N_etvs_cat2 = 0     # Number of ETVs of category 2
-bat_e1 = 576*10**6
-bat_e2 = 864*10**6      #battery capacity \Joule
+dock = [143,110,119]           # Node corresponding to charging dock  
+N_etvs_cat1 = 2     # Number of ETVs of category 1
+N_etvs_cat2 = 1     # Number of ETVs of category 2
+bat_e1 = 576      #battery capacity \MJoule
+bat_e2 = 864      #battery capacity \MJoule
 eta_e = 0.9
-I_ch = 220000 # Joule/second     
-E_e = 33000 # etvs energy consumption joule per unit distance[m]
-E_a = 3.26 # aircrafts energy consumption joule per kg per unit time[s]
+I_ch = 13.2 # MJoule/min     
+E_e = 0.033 # etvs energy consumption Mjoule per unit distance[m]
+E_a = 0.00326 # aircrafts energy consumption Kjoule per kg per unit time[s]
 d_sep = [22, 28, 37, 45, 49, 55, 72, 76, 77, 84]
-v_avg = 8.9
-t_pushback = 60 #pushback time in seconds
-T_charge_min = 60 #min charging time in seconds
-e_KE = 43.1*10**6
+v_avg = 534
+t_pushback = 1 #pushback time in seconds
+T_charge_min = 1 #min charging time in seconds
+e_KE = 43.1 # MJ/Kg
 
 # Load aircraft info
 N_etvs = N_etvs_cat1+N_etvs_cat2
 bat_e = []
+bat_e_min =[]
+bat_e_max =[]
 for i in range(N_etvs_cat1):
     bat_e.append(bat_e1)
+    bat_e_min.append( 0.2*bat_e1)
+    bat_e_max.append( 0.9*bat_e1)
 for i in range(N_etvs_cat2):
-    bat_e.append(bat_e2)    
+    bat_e.append(bat_e2) 
+    bat_e_min.append(0.2*bat_e2)
+    bat_e_max.append(0.9*bat_e2)
+
 
 G_a, G_e = Load_Graph(airport)
 
@@ -102,8 +110,8 @@ elif setting == 'API':
         print('Check if all used runways are saved in gate_runway_locs')
         sys.exit()
         
-    N_aircraft = 8# Number of aircraft
-    #N_aircraft = len(O_a)# Number of aircraft
+    #N_aircraft = 8# Number of aircraft
+    N_aircraft = len(O_a)# Number of aircraft
     
 elif setting == 'saved':
     gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
@@ -137,6 +145,8 @@ p['max_speed_e'] = max_speed_e
 p['min_speed_e'] = min_speed_e 
 p['free_speed_e'] = free_speed_e  
 p['bat_e'] = bat_e 
+p['bat_e_min'] = bat_e_min 
+p['bat_e_max'] = bat_e_max
 p['g'] = g
 p['mu'] = mu                        # Rolling resistance
 p['m_a'] = m_a                      # Airplane mass
@@ -166,7 +176,7 @@ for a in range(N_aircraft):
     
 print("DATA EXTRACTED")
 # Create the Gurobi model
-model, I_up, I_do = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat)
+model, I_up, I_do, E_a_time, E_e_return  = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat)
 
 print("MODEL CREATED")
 # Optimize the model
@@ -198,7 +208,7 @@ else:
     print("No optimal solution found.")
     
     
-Kg_kerosene = ((model.objVal-sum((variable_values['t'][a][len(P[a])-1]) for a in range(N_aircraft)))/e_KE)*100/76
+Kg_kerosene = ((model.objVal-0.0001*sum((variable_values['t'][a][len(P[a])-1]) for a in range(N_aircraft)))/e_KE)*100/76
 Costs_etvs = int(1*10**6*N_etvs_cat1+1.5*10**6*N_etvs_cat2)
 
 
@@ -211,7 +221,7 @@ for a in range(N_aircraft):
                 print(f"{'O'}_{a}_{I_up[a][b]}_{i}")
                 
     
-Plotting(variable_values, N_aircraft, N_etvs, P, I_up, p, d_a,  appear_times, G_a, cat, dep)                 
+Plotting(variable_values, N_aircraft, N_etvs, P, I_up, p, d_a,  appear_times, G_a, cat, dep,  E_a_time, E_e_return )                 
          
 print(f"KG Kerosene: {Kg_kerosene}")
 print(f"ETV costs: \N{euro sign}{Costs_etvs},-")
