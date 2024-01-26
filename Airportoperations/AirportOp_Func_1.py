@@ -54,11 +54,11 @@ def Load_Graph(airport):
 
         img = plt.imread("EHAM_chart.png")  # Replace with the actual path to your screenshot
         
-        ax.imshow(img, extent=[107000, 108000, 483000, 484000], alpha=0.8)  # Adjust the extent based on your graph size
+        ax.imshow(img, extent=[108520, 115950, 477050, 486950], alpha=0.8)  # Adjust the extent based on your graph size
         
         # Add nodes on top of the image
-        nx.draw(G_a, pos=node_positions_a, with_labels=True, node_size=15, font_size=8, ax=ax)
-        nx.draw(G_e, pos=node_positions_e, with_labels=True, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
+        nx.draw(G_a, pos=node_positions_a, with_labels=False, node_size=15, font_size=8, ax=ax)
+        nx.draw(G_e, pos=node_positions_e, with_labels=False, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
 
         
         ax.set_title('Schiphol airport (EHAM)')
@@ -299,7 +299,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     E_a_time = []
     E_e_return = []
     for a in range(N_aircraft):
-        E_a_time.append(60*E_a*(m_a[cat[a]]-fuelmass[cat[a]]*(1-dep[a])*(1/eta_e)))
+        E_a_time.append(E_a*(m_a[cat[a]]-fuelmass[cat[a]]*(1-dep[a])*(1/eta_e)))
         E_e_return.append(min(Short_path_dist(G_e, D_a[a], dock[c])for c in range(len(dock)))*(E_e))
         
     # Decision variables
@@ -309,6 +309,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     O = {}  # Order for towing tasks
     C = {}  # Choose to charge
     E = {}  # State of charge before every task
+    Emission = {}
     
     for a in range(N_aircraft):
         for n in range(len(P[a])):
@@ -333,13 +334,23 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     for a in range(N_aircraft):
        for i in range(N_etvs):          
               C[i,a] = model.addVar(vtype=GRB.BINARY, name=f"C_{i}_{a}")
+              
+    for a in range(N_aircraft):      
+            Emission[a] = model.addVar(lb=0, vtype=GRB.CONTINUOUS, name=f"Emission_{a}") 
            
     # Objective function: minimize emissions (only rolling resistance) + total taxitime
-    model.setObjective(grp.quicksum(E_a_time[a]*eta_e*(1/eta)*(t[a,len(P[a])-1]-(t[a,0]))*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs))) for a in range(N_aircraft))
+    model.setObjective(grp.quicksum(Emission[a]  for a in range(N_aircraft))
                        +0.0001*grp.quicksum((t[a,len(P[a])-1]) for a in range(N_aircraft))
                        , sense=GRB.MINIMIZE)
     
     # Constraints////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    
+    #linearize objective
+    for a in range(N_aircraft):
+        model.addConstr(Emission[a] <= 500*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs))))
+        model.addConstr(Emission[a] <= E_a_time[a]*eta_e*(1/eta)*(t[a,len(P[a])-1]-(t[a,0])))
+        model.addConstr(Emission[a] >= (E_a_time[a]*eta_e*(1/eta)*(t[a,len(P[a])-1]-(t[a,0])))-(grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs)))*500)                     
+
     for a in range(N_aircraft):
         #Min start time
         model.addConstr(t[a, 0] >= tO_a[a]+t_pushback*dep[a], f"appear_constraint_{a}")
