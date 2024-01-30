@@ -162,7 +162,7 @@ def Load_Aircraft_Info(date_of_interest, pagelimit):
     for flight in flightdata:
         operational_gates.append(flight['ramp']['current'])
         operational_runways.append(flight['runway'])
-        cat.append(flight['aircraftType']['aircraftCategory']-1)
+        cat.append(flight['aircraftType']['aircraftCategory'])
         if flight['flightDirection'] == 'D':
             appear_times_T.append(flight['actualOffBlockTime'])
             dep.append(1)
@@ -230,6 +230,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     T_charge_min = p['T_charge_min']
     start_delay = p['start_delay']
     fuelmass = p['fuelmass']
+    F_delay = p['F_delay']
     
     # Time definitions
     t_min = []
@@ -340,7 +341,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
            
     # Objective function: minimize emissions (only rolling resistance) + total taxitime
     model.setObjective(grp.quicksum(Emission[a]  for a in range(N_aircraft))
-                       +0.0001*grp.quicksum((t[a,len(P[a])-1]) for a in range(N_aircraft))
+                       +F_delay*grp.quicksum((t[a,len(P[a])-1]) for a in range(N_aircraft))
                        , sense=GRB.MINIMIZE)
     
     # Constraints////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -425,7 +426,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                 model.addConstr((O[a,I_up[a][b],i] == 1) >> (E[i, a] >= (E_a_time[a]*(t[a,len(P[a])-1]-(t[a,0]))+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*(E_e))+bat_e_min[i]))
     
     model.update()
-    return model, I_up, I_do,  E_a_time, E_e_return 
+    return model, I_up, I_do,  E_a_time, E_e_return
 
 
 def Short_path_dist(G, n1, n2):
@@ -476,9 +477,7 @@ def Plotting(variable_values, N_aircraft, N_etvs, P, I_up, p, d_a, appear_times,
     
     for i in range(len(appear_times)):
         appear_times_min.append(int(appear_times[i]))
-        
 
-    
     # Set a reasonable number of tick locations based on the range of total minutes
     tick_locations = np.linspace(min(appear_times_min), max(appear_times_min)+max(durations)/60+start_delay/60,50)
     hours, remainder = (divmod(tick_locations, 60))

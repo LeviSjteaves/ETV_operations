@@ -15,7 +15,7 @@ import sys
 #model 1 for time-dep energycons. 
 #model 2 for dist-dep energycons.
 M = 1
-module = import_module(f'AirportOp_Func_{M}')
+module = import_module(f'AirportOp_Func_{M}_N2')
 Load_Aircraft_Info = module.Load_Aircraft_Info
 Create_model = module.Create_model
 Plotting = module.Plotting
@@ -38,31 +38,30 @@ setting = 'API'
 # Parameters
 g=9.81
 # Aircraft parameters
-max_speed_a = 996      # Max aircraft velocity m/min
-min_speed_a = 60         # Min aircraft velocity m/min
-max_speed_e = 534           #m/min
-min_speed_e = 60            #m/min
-free_speed_e = 534          #m/min
-start_delay = 15   # Max allowed start delay ('start taxi time' - 'appear time') in minutes
+max_speed_a = 16.6      # Max aircraft velocity m/s
+min_speed_a = 1         # Min aircraft velocity m/s
+max_speed_e = 8.9           #m/s
+min_speed_e = 1            #m/s
+free_speed_e = 8.9          #m/s
+start_delay = 900   # Max allowed start delay ('start taxi time' - 'appear time') in seconds
 mu = 0.02            # Rolling resistance
 m_a = [10000, 20000, 45000, 70000, 120000, 180000, 240000, 300000, 380000, 450000]        # Airplane mass in tons
 fuelmass = [2000, 4000, 10000, 26000, 42000, 65000, 100000, 130000, 250000, 280000]       # fuel mass in tons
 eta = 0.3            # Turbine efficiency
 dock = [143,110,119]           # Node corresponding to charging dock  
-N_etvs_cat1 = 2     # Number of ETVs of category 1
+N_etvs_cat1 = 1   # Number of ETVs of category 1
 N_etvs_cat2 = 0   # Number of ETVs of category 2
-bat_e1 = 576      #battery capacity \MJoule
-bat_e2 = 864      #battery capacity \MJoule
+bat_e1 = 576*10**6      #battery capacity \Joule
+bat_e2 = 864*10**6      #battery capacity \Joule
 eta_e = 0.9
-I_ch = 1.32 # MJoule/min     
-E_e = 0.0039 # etvs energy consumption Mjoule per unit distance[m]
-E_a = 0.0001048 # aircrafts energy consumption Mjoule per kg per unit time[min]
-d_sep = [22, 28, 37, 45, 49, 55, 72, 76, 77, 84]
-v_avg = 534 #m/min
-t_pushback = 1 #pushback time in minutes
-T_charge_min = 1 #min charging time in minutes
-e_KE = 43.1 # MJ/Kg
-F_delay = 0.0001
+I_ch = 22000 # Joule/s     
+E_e = 3900 # etvs energy consumption joule per unit distance[m]
+E_a = 1.75 # aircrafts energy consumption joule per kg per unit time [s]
+d_sep = [22, 28, 37, 45, 49, 55, 72, 76, 77, 84] #separation in meters
+v_avg = 8.9
+t_pushback = 60 #pushback time in seconds
+T_charge_min = 60 #min charging time in seconds
+e_KE = 43.1*10**6 # J/Kg
 
 # Load aircraft info
 N_etvs = N_etvs_cat1+N_etvs_cat2
@@ -95,7 +94,7 @@ if setting == 'manual':
    
 elif setting == 'API':
     date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
-    pagelimit = [20,22]                   #Specify the amount of pages of data [-1] for last page
+    pagelimit = [20,20]                   #Specify the amount of pages of data [-1] for last page
     
     Flight_orig, Flight_dest, appear_times, dep, cat, flightdata = Load_Aircraft_Info(date_of_interest, pagelimit)
     
@@ -111,8 +110,8 @@ elif setting == 'API':
         print('Check if all used runways are saved in gate_runway_locs')
         sys.exit()
         
-    #N_aircraft = 1# Number of aircraft
-    N_aircraft = len(O_a)# Number of aircraft
+    N_aircraft = 10# Number of aircraft
+    #N_aircraft = len(O_a)# Number of aircraft
     
 elif setting == 'saved':
     gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
@@ -129,8 +128,8 @@ elif setting == 'saved':
         O_a.append(gate_runway_locs.get(Flight_orig[i]))   # Origins
         D_a.append(gate_runway_locs.get(Flight_dest[i]))   # Destinations
     
-    N_aircraft = 1# Number of aircraft
-    #N_aircraft = len(O_a)# Number of aircraft
+    #N_aircraft = 2# Number of aircraft
+    N_aircraft = len(O_a)# Number of aircraft
 else:
     print("Please specify the method to get flight info")   
 
@@ -163,7 +162,6 @@ p['T_charge_min'] = T_charge_min
 p['start_delay'] = start_delay
 p['e_KE'] = e_KE
 p['fuelmass'] = fuelmass
-p['F_delay'] = F_delay
 
 # Aircraft routing
 N_Va = []
@@ -210,7 +208,7 @@ else:
     print("No optimal solution found.")
     
     
-Kg_kerosene = ((model.objVal-F_delay*sum((variable_values['t'][a][len(P[a])-1]) for a in range(N_aircraft)))/e_KE)*100/76
+Kg_kerosene = ((model.objVal-0.0001*sum((variable_values['t'][a][len(P[a])-1]) for a in range(N_aircraft)))/e_KE)*100/76
 Costs_etvs = int(1*10**6*N_etvs_cat1+1.5*10**6*N_etvs_cat2)
 
 
