@@ -14,7 +14,7 @@ import sys
 
 #model 1 for time-dep energycons. 
 #model 2 for dist-dep energycons.
-M = 1
+M = 2
 module = import_module(f'AirportOp_Func_{M}')
 Load_Aircraft_Info = module.Load_Aircraft_Info
 Create_model = module.Create_model
@@ -34,7 +34,6 @@ airport = 'EHAM'
 #Choose from: Manually insert flight info:'manual', use Schiphol flight API:'API', import saved document 'saved' 
 setting = 'API'
     
- 
 # Parameters
 g=9.81
 # Aircraft parameters
@@ -43,13 +42,13 @@ min_speed_a = 60         # Min aircraft velocity m/min
 max_speed_e = 534           #m/min
 min_speed_e = 60            #m/min
 free_speed_e = 534          #m/min
-start_delay = 15   # Max allowed start delay ('start taxi time' - 'appear time') in minutes
+start_delay = 30   # Max allowed start delay ('start taxi time' - 'appear time') in minutes
 mu = 0.02            # Rolling resistance
 m_a = [10000, 20000, 45000, 70000, 120000, 180000, 240000, 300000, 380000, 450000]        # Airplane mass in tons
 fuelmass = [2000, 4000, 10000, 26000, 42000, 65000, 100000, 130000, 250000, 280000]       # fuel mass in tons
 eta = 0.3            # Turbine efficiency
 dock = [143,110,119]           # Node corresponding to charging dock  
-N_etvs_cat1 = 2     # Number of ETVs of category 1
+N_etvs_cat1 = 1    # Number of ETVs of category 1
 N_etvs_cat2 = 0   # Number of ETVs of category 2
 bat_e1 = 576      #battery capacity \MJoule
 bat_e2 = 864      #battery capacity \MJoule
@@ -95,7 +94,7 @@ if setting == 'manual':
    
 elif setting == 'API':
     date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
-    pagelimit = [20,22]                   #Specify the amount of pages of data [-1] for last page
+    pagelimit = [20,20]                   #Specify the amount of pages of data [-1] for last page
     
     Flight_orig, Flight_dest, appear_times, dep, cat, flightdata = Load_Aircraft_Info(date_of_interest, pagelimit)
     
@@ -111,7 +110,7 @@ elif setting == 'API':
         print('Check if all used runways are saved in gate_runway_locs')
         sys.exit()
         
-    #N_aircraft = 1# Number of aircraft
+    #N_aircraft = 6# Number of aircraft
     N_aircraft = len(O_a)# Number of aircraft
     
 elif setting == 'saved':

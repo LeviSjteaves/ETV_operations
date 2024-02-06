@@ -305,7 +305,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     #Normalize factors
     Nt_min = 0
     Nt_max = 86400
-    Ft = (1/(Nt_max-Nt_min ))*100
+    Ft = (1/(Nt_max-Nt_min ))*10000
     
     NE_min = min(bat_e_min)
     NE_max = max(bat_e_max)
@@ -313,7 +313,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     
     NEn_a_min = 0
     NEn_a_max = 2835000000
-    FEn_a = 1/(NEn_a_max-NEn_a_min )*100
+    FEn_a = 1/(NEn_a_max-NEn_a_min )*10000
     
         
     # Decision variables
@@ -362,9 +362,9 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     
     #linearize objective
     for a in range(N_aircraft):
-        model.addConstr(En_a[a] <= 500000000*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs))))
+        model.addConstr(En_a[a] <= 900000000*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs))))
         model.addConstr(En_a[a] <= (E_a_time[a]*eta_e*(1/eta))*FE*(t[a,len(P[a])-1]-(t[a,0]))/Ft)
-        model.addConstr(En_a[a] >= ((E_a_time[a]*eta_e*(1/eta))*FE*(t[a,len(P[a])-1]-(t[a,0]))/Ft)-(grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs)))*500000000)                     
+        model.addConstr(En_a[a] >= ((E_a_time[a]*eta_e*(1/eta))*FE*(t[a,len(P[a])-1]-(t[a,0]))/Ft)-(grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs)))*900000000)                     
 
     for a in range(N_aircraft):
         #Min start time

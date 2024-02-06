@@ -59,7 +59,7 @@ def Load_Graph(airport):
         
         # Add nodes on top of the image
         nx.draw(G_a, pos=node_positions_a, with_labels=False, node_size=15, font_size=8, ax=ax)
-        nx.draw(G_e, pos=node_positions_e, with_labels=False, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
+        nx.draw(G_e, pos=node_positions_e, with_labels=True, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
 
         
         ax.set_title('Schiphol airport (EHAM)')
@@ -324,7 +324,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
               C[i,a] = model.addVar(vtype=GRB.BINARY, name=f"C_{i}_{a}")
            
     # Objective function: minimize emissions (only rolling resistance) + total taxitime
-    model.setObjective(grp.quicksum((mu*m_a[cat[a]]*g*d_a[a]*(1/eta))/1000000*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))) for a in range(N_aircraft)) 
+    model.setObjective(grp.quicksum((mu*(m_a[cat[a]]-fuelmass[cat[a]]*(1-dep[a]))*g*d_a[a]*(1/eta))/1000000*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))) for a in range(N_aircraft)) 
                        +F_delay*grp.quicksum((t[a,len(P[a])-1]) for a in range(N_aircraft))
                        , sense=GRB.MINIMIZE)
     

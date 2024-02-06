@@ -15,7 +15,7 @@ runways = ['18R/36L','18C/36C','06/24','09/27','18L/36R']   #Names of the runway
 operational_gates = ['H1']
   
 # Load the graph for taxiways and serviceways
-G_taxi_D = ox.graph_from_place(airport_name,custom_filter = '["aeroway"~"runway|taxiway"]', simplify=True)
+G_taxi_D = ox.graph_from_place(airport_name,custom_filter = '["highway"~"service"]', simplify=False)
 
 G_taxi = ox.projection.project_graph(G_taxi_D, to_crs='EPSG:3395')
 
@@ -43,6 +43,7 @@ edges_AMS_a_df = pd.DataFrame(edges_AMS_data)
 
 G_AMS_a = nx.from_pandas_edgelist(edges_AMS_a_df, 'Endnodes1', 'Endnodes2', edge_attr='weight', create_using=nx.Graph)
 
+'''
 # Remove nodes
 nodes_to_remove = [28,22, 201, 185, 205, 204, 479]
 nodes_to_merge = []
@@ -59,6 +60,7 @@ nodes_to_merge.append([95,215,207,211,214,209,210,212])
 nodes_to_merge.append([220,217,222,218,221,219,610,611,213])
 nodes_to_merge.append([155,231,230,233,229])
 
+
 for i in range(len(nodes_to_merge)):
     while 0 < len(nodes_to_merge[i])-1:
         G_AMS_a = nx.contracted_nodes(G_AMS_a, nodes_to_merge[i][-1], nodes_to_merge[i][0], self_loops=False)
@@ -73,7 +75,8 @@ for k in range(len(nodes_to_remove)):
                 sum_of_weights = G_AMS_a[neighbors[i]][nodes_to_remove[k]]['weight']+G_AMS_a[neighbors[j]][nodes_to_remove[k]]['weight']
                 G_AMS_a.add_edge(neighbors[i], neighbors[j], weight=sum_of_weights)
     G_AMS_a.remove_node(nodes_to_remove[k])
-      
+'''    
+  
 node_positions = {node_id: [float(x), float(y)] for node_id, (x, y) in nodes_AMS_a_df[['x', 'y']].iterrows()}
 nx.draw(G_AMS_a, pos=node_positions, with_labels=True, node_size= 25, font_size= 12)
 

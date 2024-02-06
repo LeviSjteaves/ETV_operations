@@ -49,7 +49,7 @@ m_a = [10000, 20000, 45000, 70000, 120000, 180000, 240000, 300000, 380000, 45000
 fuelmass = [2000, 4000, 10000, 26000, 42000, 65000, 100000, 130000, 250000, 280000]       # fuel mass in tons
 eta = 0.3            # Turbine efficiency
 dock = [143,110,119]           # Node corresponding to charging dock  
-N_etvs_cat1 = 1   # Number of ETVs of category 1
+N_etvs_cat1 = 0   # Number of ETVs of category 1
 N_etvs_cat2 = 0   # Number of ETVs of category 2
 bat_e1 = 576*10**6      #battery capacity \Joule
 bat_e2 = 864*10**6      #battery capacity \Joule
@@ -110,7 +110,7 @@ elif setting == 'API':
         print('Check if all used runways are saved in gate_runway_locs')
         sys.exit()
         
-    N_aircraft = 10# Number of aircraft
+    N_aircraft = 1# Number of aircraft
     #N_aircraft = len(O_a)# Number of aircraft
     
 elif setting == 'saved':

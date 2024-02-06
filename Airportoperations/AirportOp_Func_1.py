@@ -57,7 +57,7 @@ def Load_Graph(airport):
         ax.imshow(img, extent=[108520, 115950, 477050, 486950], alpha=0.8)  # Adjust the extent based on your graph size
         
         # Add nodes on top of the image
-        nx.draw(G_a, pos=node_positions_a, with_labels=False, node_size=15, font_size=8, ax=ax)
+        nx.draw(G_a, pos=node_positions_a, with_labels=True, node_size=15, font_size=8, ax=ax)
         nx.draw(G_e, pos=node_positions_e, with_labels=False, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
 
         
@@ -300,9 +300,10 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     E_a_time = []
     E_e_return = []
     for a in range(N_aircraft):
-        E_a_time.append(E_a*(m_a[cat[a]]-fuelmass[cat[a]]*(1-dep[a])*(1/eta_e)))
+        E_a_time.append(E_a*(m_a[cat[a]]-fuelmass[cat[a]]*(1-dep[a]))*(1/eta_e))
         E_e_return.append(min(Short_path_dist(G_e, D_a[a], dock[c])for c in range(len(dock)))*(E_e))
         
+    print("Adding vars....")    
     # Decision variables
     t = {}  # Arrival times nodes
     Z = {}  # Order of visiting nodes
@@ -345,12 +346,12 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                        , sense=GRB.MINIMIZE)
     
     # Constraints////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    
+    print("Adding general constraints....")
     #linearize objective
     for a in range(N_aircraft):
-        model.addConstr(Emission[a] <= 500*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs))))
-        model.addConstr(Emission[a] <= E_a_time[a]*eta_e*(1/eta)*(t[a,len(P[a])-1]-(t[a,0])))
-        model.addConstr(Emission[a] >= (E_a_time[a]*eta_e*(1/eta)*(t[a,len(P[a])-1]-(t[a,0])))-(grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs)))*500)                     
+        model.addConstr(Emission[a] <= 2000*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs))))
+        model.addConstr(Emission[a] <= E_a_time[a]*eta_e*(1/eta)*(996/534)*(t[a,len(P[a])-1]-(t[a,0])))
+        model.addConstr(Emission[a] >= (E_a_time[a]*eta_e*(1/eta)*(996/534)*(t[a,len(P[a])-1]-(t[a,0])))-(grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs)))*2000)                     
 
     for a in range(N_aircraft):
         #Min start time
@@ -376,7 +377,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                 model.addConstr(X[a, i] == 0)
                 for b in range(len(I_up[a])):
                     model.addConstr(O[a,I_up[a][b],i] == 0)
-               
+    print("Adding collision constraints....")
     # Collision
     for n in range(len(I_col_nodes)):
             model.addConstr((Z[n] == 1) >> (t[I_col[n][0],P[I_col[n][0]].index(I_col_nodes[n])] <= t[I_col[n][1],P[I_col[n][1]].index(I_col_nodes[n])]), f"auxiliary_order1_node_{n}")   
@@ -393,7 +394,8 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
         idx_aircraftpairs = [i for i, sublist in enumerate(I_col) if sublist == I_col_ot[n]]
         for i in range(len(idx_aircraftpairs)-1):
             model.addConstr(Z[idx_aircraftpairs[i]]-Z[idx_aircraftpairs[i+1]] == 0, f"collision_headon_node_{n}")
-            
+    print("Adding sequencing constraints....")        
+    
     #Ordering of tasks
     for i in range(N_etvs):
         model.addConstr(grp.quicksum(X[a,i] for a in range(N_aircraft)) <= 1)
@@ -408,7 +410,8 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                     model.addConstr((O[a,I_up[a][b],i] == 1) >> (grp.quicksum(O[I_up[a][b],I_up[I_up[a][b]][k] ,i] for k in range(len(I_up[I_up[a][b]])))+X[I_up[a][b],i] >=1 ))
                 if a == I_up[a][b]:  
                     model.addConstr(O[a,I_up[a][b],i] == 0)
-                                    
+                    
+    print("Adding energy constraints....")                                
     # ETV energy consumption
     for i in range(N_etvs): 
         for a in range(N_aircraft):
@@ -426,8 +429,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                 model.addConstr((O[a,I_up[a][b],i] == 1) >> (E[i, a] >= (E_a_time[a]*(t[a,len(P[a])-1]-(t[a,0]))+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*(E_e))+bat_e_min[i]))
     
     model.update()
-    return model, I_up, I_do,  E_a_time, E_e_return
-
+    return model, I_up, I_do, E_a_time, E_e_return
 
 def Short_path_dist(G, n1, n2):
     dist = nx.shortest_path_length(G, source=n1, target=n2, weight='weight')
