@@ -57,8 +57,8 @@ def Load_Graph(airport):
         ax.imshow(img, extent=[108520, 115950, 477050, 486950], alpha=0.8)  # Adjust the extent based on your graph size
         
         # Add nodes on top of the image
-        nx.draw(G_a, pos=node_positions_a, with_labels=True, node_size=15, font_size=8, ax=ax)
-        nx.draw(G_e, pos=node_positions_e, with_labels=False, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
+        nx.draw(G_a, pos=node_positions_a, with_labels=False, node_size=15, font_size=8, ax=ax)
+        nx.draw(G_e, pos=node_positions_e, with_labels=True, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
 
         
         ax.set_title('Schiphol airport (EHAM)')
@@ -152,16 +152,14 @@ def Load_Aircraft_Info(date_of_interest, pagelimit):
         if main_flight not in seen_main_flights and flight['cdmFlightState'] != 'CNX' and flight['aircraftType']['aircraftCategory']>1 and (flight['actualOffBlockTime'] is not None or flight['actualLandingTime'] is not None):
             seen_main_flights.add(main_flight)
             flightdata.append(flight)
-
-    operational_runways = []   #Names of the runways of that airport
-    operational_gates = []
+            
+    #flightdata = sorted(flightdata, key=lambda x: x['actualOffBlockTime'])
+    
     appear_times_T = []
     dep = []
     cat = []
     
     for flight in flightdata:
-        operational_gates.append(flight['ramp']['current'])
-        operational_runways.append(flight['runway'])
         cat.append(flight['aircraftType']['aircraftCategory']-1)
         if flight['flightDirection'] == 'D':
             appear_times_T.append(flight['actualOffBlockTime'])
@@ -171,7 +169,7 @@ def Load_Aircraft_Info(date_of_interest, pagelimit):
             dep.append(0)
 
     appear_times = appeartimes(appear_times_T, date_of_interest)
-    
+        
     Flight_orig=[]
     Flight_dest=[]
 
@@ -193,6 +191,11 @@ def Load_Aircraft_Info(date_of_interest, pagelimit):
             Flight_dest.pop(day_before[i]) 
             dep.pop(day_before[i]) 
             cat.pop(day_before[i]) 
+    
+    
+    sorted_lists = zip(*sorted(zip(appear_times, Flight_orig, Flight_dest, dep, cat)))
+    appear_times, Flight_orig, Flight_dest, dep, cat = map(list, sorted_lists)
+            
             
     np.save('Flight_O.npy', Flight_orig)
     np.save('Flight_D.npy', Flight_dest)
@@ -234,6 +237,8 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     g=p['g']
     M_Xi_max=p['M_Xi_max']
     M_time=p['M_time']
+    t_warmup = p['t_warmup']
+    Xi_a_warmup = p['Xi_a_warmup']
     
     # Time definitions
     t_min = []
@@ -306,7 +311,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
         E_a_dis.append((mu*g*d_a[a]*(m_a[cat[a]]-fuelmass[cat[a]]*(1-dep[a]))*(1/eta_e))/1000000)
         E_e_return.append(min(Short_path_dist(G_e, D_a[a], dock[c])for c in range(len(dock)))*(E_e))
         
-    print("Adding vars....")
+    print("Adding variables....")
     # Decision variables
     t = {}  # Arrival times nodes
     Z = {}  # Order of visiting nodes
@@ -353,8 +358,8 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     #linearize objective
     for a in range(N_aircraft):
         model.addConstr(Emission[a] <= M_Xi_max*(1-grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs))))
-        model.addConstr(Emission[a] <= Xi_a[cat[a]]*(t[a,len(P[a])-1]-(t[a,0])))
-        model.addConstr(Emission[a] >= (Xi_a[cat[a]]*(t[a,len(P[a])-1]-(t[a,0])))-(grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs)))*M_Xi_max)                     
+        model.addConstr(Emission[a] <= Xi_a[cat[a]]*(t[a,len(P[a])-1]-(t[a,0])) + t_warmup*Xi_a_warmup[cat[a]]*(dep[a]))
+        model.addConstr(Emission[a] >= (Xi_a[cat[a]]*(t[a,len(P[a])-1]-(t[a,0]))+ t_warmup*Xi_a_warmup[cat[a]]*(dep[a]))-(grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a])))for i in range(N_etvs)))*M_Xi_max)                     
 
     for a in range(N_aircraft):
         #Min start time
@@ -420,9 +425,9 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
         for a in range(N_aircraft):
             for b in range(len(I_up[a])): 
                 if a!=I_up[a][b]:
-                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_dis[a]+ (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock))))*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / free_speed_e))*I_ch))+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
+                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_dis[a]+ (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock))))*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+(Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / free_speed_e)))*I_ch))+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
                     model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_dis[a]+ Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*E_e)+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint2_{a}_{b}_{i}")   
-                    
+                
     # ETV energy availability
     for i in range(N_etvs): 
         for a in range(N_aircraft):
@@ -432,13 +437,13 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                 model.addConstr((O[a,I_up[a][b],i] == 1) >> (E[i, a] >= (E_a_dis[a]+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*(E_e))+0.2*bat_e[i]))
     
     model.update()
-    return model, I_up, I_do, E_a_dis, E_e_return
+    return model, I_up, I_do, E_a_dis, E_e_return, t_min
 
 def Short_path_dist(G, n1, n2):
     dist = nx.shortest_path_length(G, source=n1, target=n2, weight='weight')
     return dist
 
-def Plotting(variable_values, N_aircraft, N_etvs, P, I_up, p, d_a, appear_times, G_a, cat, dep, E_a_dis, E_e_return ):
+def Plotting(variable_values, P, I_up, p, d_a, appear_times, G_a, cat, dep, E_a_dis, E_e_return ):
     # unpack P
     N_aircraft = p['N_aircraft']
     N_etvs = p['N_etvs']
@@ -484,7 +489,7 @@ def Plotting(variable_values, N_aircraft, N_etvs, P, I_up, p, d_a, appear_times,
         appear_times_min.append(int(appear_times[i]))
 
     # Set a reasonable number of tick locations based on the range of total minutes
-    tick_locations = np.linspace(min(appear_times_min), max(appear_times_min)+max(durations)/60+start_delay/60,50)
+    tick_locations = np.linspace(min(appear_times_min), max(appear_times_min)+max(durations)+start_delay,50)
     hours, remainder = (divmod(tick_locations, 60))
     timestamps = [f'{int(h):02d}:{int(r):02d}' for h, r in zip(hours, remainder)]
     
