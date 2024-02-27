@@ -14,6 +14,7 @@ import seaborn as sns
 import sys
 import numpy as np
 import matplotlib.patches as mpatches 
+from collections import defaultdict
 
 #from Functions_basicprob import appeartimes
 from datetime import datetime
@@ -58,7 +59,7 @@ def Load_Graph(airport):
         
         # Add nodes on top of the image
         nx.draw(G_a, pos=node_positions_a, with_labels=False, node_size=15, font_size=8, ax=ax)
-        nx.draw(G_e, pos=node_positions_e, with_labels=True, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
+        nx.draw(G_e, pos=node_positions_e, with_labels=False, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
 
         
         ax.set_title('Schiphol airport (EHAM)')
@@ -149,8 +150,8 @@ def Load_Aircraft_Info(date_of_interest, pagelimit):
     flightdata = []
     for flight in rawflightdata:
         main_flight = flight['aircraftRegistration']
-        if main_flight not in seen_main_flights and flight['cdmFlightState'] != 'CNX' and flight['aircraftType']['aircraftCategory']>1 and (flight['actualOffBlockTime'] is not None or flight['actualLandingTime'] is not None):
-            seen_main_flights.add(main_flight)
+        if main_flight not in seen_main_flights and flight['cdmFlightState'] != 'CNX' and flight['aircraftType']['aircraftCategory']>2 and (flight['actualOffBlockTime'] is not None or flight['actualLandingTime'] is not None):
+            #seen_main_flights.add(main_flight)
             flightdata.append(flight)
             
     #flightdata = sorted(flightdata, key=lambda x: x['actualOffBlockTime'])
@@ -202,8 +203,9 @@ def Load_Aircraft_Info(date_of_interest, pagelimit):
     np.save('Flight_t.npy', appear_times)
     np.save('Flight_dep.npy', dep)
     np.save('Flight_info.npy', cat)
-    
-    return Flight_orig, Flight_dest, appear_times, dep, cat, flightdata
+    np.save(f'API_data_{date_of_interest}.npy', rawflightdata)
+     
+    return Flight_orig, Flight_dest, appear_times, dep, cat, flightdata, rawflightdata
     
 def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     model = grp.Model("Aircraft_Taxiing")
@@ -239,6 +241,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     M_time=p['M_time']
     t_warmup = p['t_warmup']
     Xi_a_warmup = p['Xi_a_warmup']
+    setrange = p['setrange']
     
     # Time definitions
     t_min = []
@@ -254,18 +257,19 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
         t_max.append(t_a_max)
     
     # Definitions
+    #after
     I_up = []
     for a in range(N_aircraft):
         I_up.append([])
         for b in range(N_aircraft):
-            if tO_a[b]+start_delay >= tO_a[a]:
+            if tO_a[b]+start_delay >= t_min[a][-1] and tO_a[b]+start_delay <= t_min[a][-1]+setrange :
                 I_up[a].append(b)
-                
+    #before            
     I_do = []
     for a in range(N_aircraft):
         I_do.append([])
         for b in range(N_aircraft):
-            if tO_a[b] <= tO_a[a]+start_delay:
+            if t_min[b][-1] <= tO_a[a]+start_delay and t_min[b][-1]+setrange >= tO_a[a]+start_delay:
                 I_do[a].append(b)
     
     
@@ -346,11 +350,11 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
               C[i,a] = model.addVar(vtype=GRB.BINARY, name=f"C_{i}_{a}")
               
     for a in range(N_aircraft):      
-            Emission[a] = model.addVar(lb=0, vtype=GRB.CONTINUOUS, name=f"Emission_{a}") 
+            Emission[a] = model.addVar(lb=0, ub=500, vtype=GRB.CONTINUOUS, name=f"Emission_{a}") 
            
     # Objective function: minimize emissions (only rolling resistance) + total taxitime
-    model.setObjective(grp.quicksum(Emission[a]  for a in range(N_aircraft))
-                       +F_delay*grp.quicksum((t[a,len(P[a])-1]) for a in range(N_aircraft))
+    model.setObjective(grp.quicksum(Emission[a]  for a in range(N_aircraft))#/N_aircraft
+                       +F_delay*grp.quicksum((t[a,len(P[a])-1]-(t_min[a][len(P[a])-1])) for a in range(N_aircraft))
                        , sense=GRB.MINIMIZE)
     
     # Constraints////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -374,6 +378,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
             #Min/max time to arrive at each node (from min/max speed)
             model.addConstr(t[a, n] >= t[a, n-1] + (Short_path_dist(G_a, P[a][n-1], P[a][n]) / max_speed_a) - (grp.quicksum(X[a, i] +grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))*M_time), f"arrival_constraint_min_{a}_{n}")
             model.addConstr(t[a, n] <= t[a, n-1] + (Short_path_dist(G_a, P[a][n-1], P[a][n]) / min_speed_a) + (grp.quicksum(X[a, i] +grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))*M_time), f"arrival_constraint_max_{a}_{n}")            
+            
             #Min/max time to arrive at each node while towed (from min/max speed)
             model.addConstr(t[a, n] >= t[a, n-1] + (Short_path_dist(G_a, P[a][n-1], P[a][n]) / max_speed_e) - (1 - (grp.quicksum(X[a, i] +grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))))*M_time, f"arrival_constraint_min_tow_{a}_{n}")
             model.addConstr(t[a, n] <= t[a, n-1] + (Short_path_dist(G_a, P[a][n-1], P[a][n]) / min_speed_e) + (1 - (grp.quicksum(X[a, i] +grp.quicksum(O[a,I_up[a][b],i] for b in range(len(I_up[a]))) for i in range(N_etvs))))*M_time, f"arrival_constraint_max_tow_{a}_{n}")            
@@ -385,25 +390,42 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                 model.addConstr(X[a, i] == 0)
                 for b in range(len(I_up[a])):
                     model.addConstr(O[a,I_up[a][b],i] == 0)
-    print("Adding collision constraints....")
+            if cat[a]>=8 :
+                model.addConstr(X[a, i] == 0)
+                for b in range(len(I_up[a])):
+                    model.addConstr(O[a,I_up[a][b],i] == 0)
+
     # Collision
+    print("Adding collision constraints 1/3...")
     for n in range(len(I_col_nodes)):
             model.addConstr((Z[n] == 1) >> (t[I_col[n][0],P[I_col[n][0]].index(I_col_nodes[n])] <= t[I_col[n][1],P[I_col[n][1]].index(I_col_nodes[n])]), f"auxiliary_order1_node_{n}")   
             model.addConstr((Z[n] == 0) >> (t[I_col[n][0],P[I_col[n][0]].index(I_col_nodes[n])] >= t[I_col[n][1],P[I_col[n][1]].index(I_col_nodes[n])]), f"auxiliary_order2_node_{n}")   
             model.addConstr(t[I_col[n][1],P[I_col[n][1]].index(I_col_nodes[n])] >= t[I_col[n][0],P[I_col[n][0]].index(I_col_nodes[n])] +(d_sep[cat[a]]/v_avg) - (1-Z[n])*M_time, f"collision_conflict_node_{n}") 
             model.addConstr(t[I_col[n][0],P[I_col[n][0]].index(I_col_nodes[n])] >= t[I_col[n][1],P[I_col[n][1]].index(I_col_nodes[n])] +(d_sep[cat[a]]/v_avg) - (Z[n])*M_time, f"collision_conflict_node_{n}") 
+    print("Adding collision constraints 2/3...")
     
-    for n in range(len(I_col_ho_nodes)):   
-        idx_aircraftpairs = [i for i, sublist in enumerate(I_col) if sublist == I_col_ho[n]]
+    sublist_indices_ho = defaultdict(list)
+    for i, sublist in enumerate(I_col):
+        sublist_indices_ho[tuple(sublist)].append(i)
+    
+    for n in range(len(I_col_ho_nodes)):
+        # Get the indices corresponding to the current collision node
+        idx_aircraftpairs = sublist_indices_ho.get(tuple(I_col_ho[n]), [])
         for i in range(len(idx_aircraftpairs)-1):
-            model.addConstr(Z[idx_aircraftpairs[i]]-Z[idx_aircraftpairs[i+1]] == 0, f"collision_headon_node_{n}")
-                
-    for n in range(len(I_col_ot_nodes)):  
-        idx_aircraftpairs = [i for i, sublist in enumerate(I_col) if sublist == I_col_ot[n]]
+            model.addConstr(Z[idx_aircraftpairs[i]] - Z[idx_aircraftpairs[i+1]] == 0, f"collision_headon_node_{n}")
+    print("Adding collision constraints 3/3...")  
+    
+    sublist_indices_ot = defaultdict(list)
+    for i, sublist in enumerate(I_col):
+        sublist_indices_ot[tuple(sublist)].append(i)
+    
+    for n in range(len(I_col_ot_nodes)):
+        # Get the indices corresponding to the current collision node
+        idx_aircraftpairs = sublist_indices_ot.get(tuple(I_col_ot[n]), [])
         for i in range(len(idx_aircraftpairs)-1):
-            model.addConstr(Z[idx_aircraftpairs[i]]-Z[idx_aircraftpairs[i+1]] == 0, f"collision_headon_node_{n}")
+            model.addConstr(Z[idx_aircraftpairs[i]] - Z[idx_aircraftpairs[i+1]] == 0, f"collision_headon_node_{n}")
+    
     print("Adding sequencing constraints....")        
-    
     #Ordering of tasks
     for i in range(N_etvs):
         model.addConstr(grp.quicksum(X[a,i] for a in range(N_aircraft)) <= 1)
@@ -416,7 +438,8 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                     model.addConstr((O[a,I_up[a][b],i] == 1) >> (t[I_up[a][b],0] >= t[a,len(P[a])-1] + Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / free_speed_e +t_pushback*dep[I_up[a][b]]), f"auxiliary_task_{a}_{b}_{i}")   
                     model.addConstr((O[a,I_up[a][b],i] == 1) >> (t[I_up[a][b],0] >= t[a,len(P[a])-1] + (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock)))) / free_speed_e  +T_charge_min +t_pushback*dep[I_up[a][b]] -(1-C[i,a])*M_time) , f"auxiliary_task_{a}_{b}_{i}")   
                     model.addConstr((O[a,I_up[a][b],i] == 1) >> (grp.quicksum(O[I_up[a][b],I_up[I_up[a][b]][k] ,i] for k in range(len(I_up[I_up[a][b]])))+X[I_up[a][b],i] >=1 ))
-                if a == I_up[a][b]:  
+                    model.addConstr((C[i,a] == 1) >> (grp.quicksum(O[a,I_up[a][l],i] for l in range(len(I_up[a])))==1))
+                if a == I_up[a][b]:
                     model.addConstr(O[a,I_up[a][b],i] == 0)
                     
     print("Adding energy constraints....")                                
@@ -425,19 +448,21 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
         for a in range(N_aircraft):
             for b in range(len(I_up[a])): 
                 if a!=I_up[a][b]:
-                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_dis[a]+ (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock))))*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+(Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / free_speed_e)))*I_ch))+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
+                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_dis[a]+ (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock))))*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+(Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / free_speed_e)))*I_ch[i]))+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
                     model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_dis[a]+ Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*E_e)+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint2_{a}_{b}_{i}")   
-                
+                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] >= E[i, a]-(E_a_dis[a]+ (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock))))*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+(Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / free_speed_e)))*I_ch[i]))-(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
+                    model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] >= E[i, a]-(E_a_dis[a]+ Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*E_e)-(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint2_{a}_{b}_{i}")   
+                          
     # ETV energy availability
     for i in range(N_etvs): 
         for a in range(N_aircraft):
             model.addConstr((X[a,i] == 1) >> (E[i, a] >= (E_a_dis[a]+E_e_return[a]+0.2*bat_e[i])))#return to C (charge dock)
-            model.addConstr(E[i, a] <=  0.9*bat_e[i],  f"max_cap_{i}_{a}")
+            model.addConstr(E[i,a] <=  0.9*bat_e[i],  f"max_cap_{i}_{a}")
             for b in range(len(I_up[a])): 
                 model.addConstr((O[a,I_up[a][b],i] == 1) >> (E[i, a] >= (E_a_dis[a]+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*(E_e))+0.2*bat_e[i]))
-    
+
     model.update()
-    return model, I_up, I_do, E_a_dis, E_e_return, t_min
+    return model, I_up, I_do, E_a_dis, E_e_return, t_min, idx_aircraftpairs, I_col_nodes, I_col_ho_nodes, I_col_ot_nodes, I_col, I_col_ho, I_col_ot
 
 def Short_path_dist(G, n1, n2):
     dist = nx.shortest_path_length(G, source=n1, target=n2, weight='weight')
@@ -582,3 +607,4 @@ def Plotting(variable_values, P, I_up, p, d_a, appear_times, G_a, cat, dep, E_a_
         ax.plot(plane_path_x, plane_path_y, color=colors_air[a], markersize=5)
     '''
     return
+
