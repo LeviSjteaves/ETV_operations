@@ -9,6 +9,7 @@ from gurobipy import GRB
 import networkx as nx
 from importlib import import_module
 import sys
+import time
 from datetime import datetime
 import os
 import numpy as np
@@ -96,14 +97,15 @@ if APIsave == True:
 
 #Specify all the iterations
 iterations = []
-N_etvs_cat1_i = [1]   # Number of ETVs of category 1
-N_etvs_cat2_i = [0]   # Number of ETVs of category 2
+N_etvs_cat1_i = [0, 1, 2, 3]   # Number of ETVs of category 1
+N_etvs_cat2_i = [0, 1, 2, 3]   # Number of ETVs of category 2
 start_delay_i = [0]  # Allowed start delay
 
 if save == True:
     # Create folder with date
     folder_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     os.makedirs(folder_name)
+    save_it = 0
 
 for it1 in range(len(N_etvs_cat1_i)): 
     for it2 in range(len(N_etvs_cat2_i)): 
@@ -112,9 +114,9 @@ for it1 in range(len(N_etvs_cat1_i)):
             g=9.81
             # Aircraft parameters
             max_speed_a = 996           # Max aircraft velocity m/min
-            min_speed_a = 60            # Min aircraft velocity m/min
+            min_speed_a = 180            # Min aircraft velocity m/min
             max_speed_e = 534           # m/min
-            min_speed_e = 60            # m/min
+            min_speed_e = 180            # m/min
             free_speed_e = 534          # m/min
             mu = 0.02                   # Rolling resistance
             m_a = [10000, 20000, 45000, 70000, 120000, 180000, 240000, 300000, 380000, 450000]        # Airplane mass in kg
@@ -130,7 +132,7 @@ for it1 in range(len(N_etvs_cat1_i)):
             E_a = 0.0001048                 # aircrafts energy consumption Mjoule per kg per unit time[min]
             d_sep = [22, 28, 37, 45, 49, 55, 72, 76, 77, 84]        # Separation distances for each category
             v_avg = 534                     # m/min
-            t_pushback = 2                  # pushback time in minutes
+            t_pushback = 2                 # pushback time in minutes
             T_charge_min = 10               # min charging time in minutes
             e_KE = 43.1                     # MJ/Kg
             F_delay = 0.01                  # Multi objective optimization factor
@@ -206,7 +208,7 @@ for it1 in range(len(N_etvs_cat1_i)):
             d_a = []
             
             for a in range(N_aircraft):
-                sp = nx.shortest_path(G_a, source=O_a[a], target=D_a[a])
+                sp = nx.shortest_path(G_a, source=O_a[a], target=D_a[a], weight='weight')
                 d_a.append(nx.shortest_path_length(G_a, source=O_a[a], target=D_a[a], weight='weight'))
                 N_Va.append(len(sp))
                 P.append(sp)
@@ -214,16 +216,46 @@ for it1 in range(len(N_etvs_cat1_i)):
             print("DATA EXTRACTED")
                             
             # Create the Gurobi model
-            model, I_up, I_do, E_a_dis, E_e_return, t_min, idx_aircraftpairs, I_col_nodes, I_col_ho_nodes, I_col_ot_nodes, I_col, I_col_ho, I_col_ot  = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat)
+            model, I_up, I_do, E_a_dis, E_e_return, t_min = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat)
 
             print("MODEL CREATED")
+            # set optimization limits
+            model.Params.TimeLimit = 14400 
+            model.Params.OutputFlag = 1 
+            model.setParam('MIPGap', 0.05)
+            
+            # Set the callback
+            obj_values = []
+            gap_values = []
+            bound_values = []
+            counter = []
+            times = []
+            
+            def callback(model, where):
+                if where == GRB.Callback.MIPSOL:
+                    obj_values.append(model.cbGet(GRB.Callback.MIPSOL_OBJ))
+                    gap_values.append(model.cbGet(GRB.Callback.MIPSOL_OBJBST) - model.cbGet(GRB.Callback.MIPSOL_OBJBND))
+                    bound_values.append(model.cbGet(GRB.Callback.MIPSOL_OBJBND))
+                    times.append(time.time() - start_time)
+                elif where == GRB.Callback.MIPNODE:
+                    counter.append(1)
+                    #model.terminate()
+                    
+            # Start time
+            start_time = time.time()    
             # Optimize the model
-            #model.setParam('MIPGap', 0.05)
-            model.optimize()
+            model.optimize(callback)
             
             print("MODEL SOLVED")
             # Display results
             variable_values = {}
+            
+            if model.status == GRB.OPTIMAL or model.status == GRB.TIME_LIMIT:
+                # Save the final solution
+                obj_values.append(model.objVal)
+                bound_values.append(model.ObjBound)
+                gap_values.append(model.MIPGap)
+                times.append(time.time() - start_time)
             
             if model.status == GRB.OPTIMAL:
                 print("Optimal solution found:")
@@ -245,26 +277,62 @@ for it1 in range(len(N_etvs_cat1_i)):
                 print("Optimal objective value:", model.objVal)
             else:
                 print("No optimal solution found.")
+                for var in model.getVars():
+                    #print(f"{var.varName}: {var.x}")
+                    # Split variable name into parts based on underscores and convert indices to integers
+                    parts = [int(part) if part.isdigit() else part for part in var.varName.split('_')]
+            
+                    # Create nested dictionaries for each part
+                    current_dict = variable_values
+                    for part in parts[:-1]:
+                        if part not in current_dict:
+                            current_dict[part] = {}
+                        current_dict = current_dict[part]
+            
+                    # Assign the variable value to the nested dictionary
+                    current_dict[parts[-1]] = round(var.x,2)
                 
                 
             Kg_kerosene = ((model.objVal-F_delay*sum((variable_values['t'][a][len(P[a])-1]-(t_min[a][len(P[a])-1])) for a in range(N_aircraft))))
             Costs_etvs = int(1*10**6*N_etvs_cat1+1.5*10**6*N_etvs_cat2)
-            taxi_delay = sum((variable_values['t'][a][len(P[a])-1])-t_min[a][-1] for a in range(N_aircraft))/N_aircraft
+            
+            total_delay=[]
+            for a in range(N_aircraft):
+                total_delay.append((variable_values['t'][a][len(P[a])-1])-(t_min[a][-1]+t_pushback*dep[a]))
+            
+            taxi_delay = np.mean(total_delay)
+            
             print(f"KG Kerosene: {Kg_kerosene}")
             print(f"ETV costs: \N{euro sign}{Costs_etvs},-")   
             print(f"avg delay: {taxi_delay}")
             
             Results = {}
             Results['p'] = p
+            Results['P'] = P
             Results['variable_values'] =variable_values
             Results['Runtime'] = model.Runtime
             Results['Kg_kerosene'] = Kg_kerosene
             Results['Costs_etvs'] = Costs_etvs
             Results['Taxi_delay'] = taxi_delay
+            Results['Total_delay'] = total_delay
+            Results['I_up'] = I_up
+            Results['I_do'] = I_do
+            Results['t_min'] = t_min
+            Results['appear_times'] = appear_times
+            Results['G_a'] = G_a
+            Results['cat'] = cat
+            Results['dep'] = dep
+            Results['E_a_dis'] = E_a_dis
+            Results['E_e_return'] = E_e_return
+            Results['obj_values'] = obj_values
+            Results['gap_values'] = gap_values
+            Results['bound_values'] = bound_values
+            Results['times'] = times
             iterations.append(Results)
 
             if save == True:
-                np.save(f'{folder_name}/Results_{it1+it2+it3}.npy', Results)     
+                np.save(f'{folder_name}/Results_{save_it}.npy', Results) 
+                save_it = save_it+1
                     
 Runtime = [iteration['Runtime'] for iteration in iterations] 
 print(Runtime)
@@ -278,5 +346,5 @@ for a in range(N_aircraft):
                 print(f"{'O'}_{a}_{I_up[a][b]}_{i}")
              
     
-Plotting(variable_values, P, I_up, p, d_a,  appear_times, G_a, cat, dep,  E_a_dis, E_e_return )  
+Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, E_e_return, t_min)  
    

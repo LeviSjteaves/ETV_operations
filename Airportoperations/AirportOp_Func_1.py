@@ -58,7 +58,7 @@ def Load_Graph(airport):
         ax.imshow(img, extent=[108520, 115950, 477050, 486950], alpha=0.8)  # Adjust the extent based on your graph size
         
         # Add nodes on top of the image
-        nx.draw(G_a, pos=node_positions_a, with_labels=False, node_size=15, font_size=8, ax=ax)
+        nx.draw(G_a, pos=node_positions_a, with_labels=True, node_size=15, font_size=10, ax=ax)
         nx.draw(G_e, pos=node_positions_e, with_labels=False, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
 
         
@@ -462,19 +462,20 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                 model.addConstr((O[a,I_up[a][b],i] == 1) >> (E[i, a] >= (E_a_dis[a]+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*(E_e))+0.2*bat_e[i]))
 
     model.update()
-    return model, I_up, I_do, E_a_dis, E_e_return, t_min, idx_aircraftpairs, I_col_nodes, I_col_ho_nodes, I_col_ot_nodes, I_col, I_col_ho, I_col_ot
+    return model, I_up, I_do, E_a_dis, E_e_return, t_min
 
 def Short_path_dist(G, n1, n2):
     dist = nx.shortest_path_length(G, source=n1, target=n2, weight='weight')
     return dist
 
-def Plotting(variable_values, P, I_up, p, d_a, appear_times, G_a, cat, dep, E_a_dis, E_e_return ):
+def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, E_e_return, t_min):
     # unpack P
     N_aircraft = p['N_aircraft']
     N_etvs = p['N_etvs']
     bat_e = p['bat_e']
     max_speed_a = p['max_speed_a']
     start_delay = p['start_delay']
+    t_pushback = p['t_pushback']
     
     colors = sns.color_palette('husl', n_colors=N_etvs)
     etv_color = []
@@ -501,6 +502,7 @@ def Plotting(variable_values, P, I_up, p, d_a, appear_times, G_a, cat, dep, E_a_
             duration = variable_values['t'][a][len(P[a])-1] - start_time
             ax.barh(a, duration, left=start_time, color=etv_color[a])
             ax.plot(appear_times[a], a, 'go', markersize=10)
+            ax.plot((t_min[a][-1]+t_pushback*dep[a]), a, 'ro', markersize=10)
             durations.append(duration)
             for n in range(len(variable_values['t'][a])):
                 node_number= P[a][n]
@@ -591,20 +593,6 @@ def Plotting(variable_values, P, I_up, p, d_a, appear_times, G_a, cat, dep, E_a_
                         ax.text(variable_values['t'][a][len(P[a])-1], etv_number[a]-0.5+(variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]), round((variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]),2), color='black',
                                 ha='center', va='center', fontweight='normal', fontsize= 7)
     
-    ''' 
-    # Create a figure and axis
-    fig, ax = plt.subplots()
-    ax.grid(True, which='both', linestyle='--', linewidth=0.5, color='gray')
-
-    colors_air = sns.color_palette('husl', n_colors=N_aircraft)
-    for a in range(N_aircraft): 
-        plane_path_x = []
-        plane_path_y = []
-        for n in range(1, len(variable_values['t'][a])):
-            node_number= P[a][n]
-            plane_path_y.append(node_number)
-            plane_path_x.append(variable_values['t'][a][n]/60)
-        ax.plot(plane_path_x, plane_path_y, color=colors_air[a], markersize=5)
-    '''
+ 
     return
 

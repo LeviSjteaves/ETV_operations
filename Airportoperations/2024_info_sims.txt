@@ -1,20 +1,34 @@
-2024-02-23_13-47-55
+2024-02-27_10-35-45 ############################
 
-page 20-25
+page [20, 20-21, 20-22, 20-23, 20-24, 20-25, 20-26, 20-27]
+etv cat 1: [1]
+etv cat 2: [0]
+delay: [0]
+min charge: 10 min
+F_delay: 0.01
+setrange: 60
+abort at gap of 0%
+
+
+2024-03-01_16-01-46 ############################
+
+page [20-25]
 etv cat 1: [0,1,2]
-etv cat 2: [0,1]
-delay: 0
+etv cat 2: [0,1,2] (aborted last iteration)
+delay: [0]
 min charge: 10 min
 F_delay: 0.01
 setrange: 60
-mu = 0.06
+abort at gap of 5%
 
-2024-02-26_22-42-00
+2024-03-02_14-08-41 ############################
 
-page 20-25
-etv cat 1: 1
-etv cat 2: 0
-delay: [0 5 10 15]
+page [20-25]
+etv cat 1: [0,1,2,3]
+etv cat 2: [0,1,2,3] 
+delay: [0]
 min charge: 10 min
 F_delay: 0.01
 setrange: 60
+abort at gap of 5%
+abort at 4 hours
