@@ -47,6 +47,11 @@ def Load_Graph(airport):
         
         G_a = G_AMS_a
         G_e = G_AMS_e
+        
+        G_e_undirected = nx.Graph()
+
+        # Add edges from the directed graph to the undirected graph
+        G_e_undirected.add_edges_from(G_e.edges())
     
         # Set labels and title
         fig, ax = plt.subplots()
@@ -58,11 +63,20 @@ def Load_Graph(airport):
         ax.imshow(img, extent=[108520, 115950, 477050, 486950], alpha=0.8)  # Adjust the extent based on your graph size
         
         # Add nodes on top of the image
-        nx.draw(G_a, pos=node_positions_a, with_labels=True, node_size=15, font_size=10, ax=ax)
-        nx.draw(G_e, pos=node_positions_e, with_labels=False, node_color='red', node_size=15, font_size=8, ax=ax, edge_color='grey')
-
+        nx.draw(G_a, pos=node_positions_a, with_labels=True, node_color='black', node_size=15, font_size=10, ax=ax)
+        nx.draw(G_e_undirected, pos=node_positions_e, with_labels=True, node_color='grey', node_size=15, font_size=8, ax=ax, edge_color='grey', style='dashed', width=1.5)
+       
+        # Draw corresponding nodes in blue
+        corresponding_nodes = set(G_a.nodes()) & set(G_e.nodes())
+        nx.draw_networkx_nodes(G_a, pos=node_positions_a, nodelist=corresponding_nodes, node_color='#1f77b4', node_size=15, ax=ax)
+        nx.draw_networkx_nodes(G_e, pos=node_positions_e, nodelist=corresponding_nodes, node_color='#1f77b4', node_size=15, ax=ax)
         
-        ax.set_title('Schiphol airport (EHAM)')
+        ax.set_aspect('equal')
+        ax.set_title('Schiphol airport (AMS)')
+        # Show the plot
+        plt.show()
+        
+        
 
         
     elif airport == 'basic':
@@ -262,14 +276,14 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     for a in range(N_aircraft):
         I_up.append([])
         for b in range(N_aircraft):
-            if tO_a[b]+start_delay >= t_min[a][-1] and tO_a[b]+start_delay <= t_min[a][-1]+setrange :
+            if tO_a[b]+start_delay*dep[b] >= t_min[a][-1] and tO_a[b]+start_delay*dep[b] <= t_min[a][-1]+setrange :
                 I_up[a].append(b)
     #before            
     I_do = []
     for a in range(N_aircraft):
         I_do.append([])
         for b in range(N_aircraft):
-            if t_min[b][-1] <= tO_a[a]+start_delay and t_min[b][-1]+setrange >= tO_a[a]+start_delay:
+            if t_min[b][-1] <= tO_a[a]+start_delay*dep[a] and t_min[b][-1]+setrange >= tO_a[a]+start_delay*dep[a]:
                 I_do[a].append(b)
     
     
@@ -501,15 +515,15 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
             start_time = variable_values['t'][a][0]
             duration = variable_values['t'][a][len(P[a])-1] - start_time
             ax.barh(a, duration, left=start_time, color=etv_color[a])
-            ax.plot(appear_times[a], a, 'go', markersize=10)
-            ax.plot((t_min[a][-1]+t_pushback*dep[a]), a, 'ro', markersize=10)
+            ax.plot(appear_times[a], a, 'go', markersize=7)
+            ax.plot((t_min[a][-1]+t_pushback*dep[a]), a, 'ro', markersize=7)
             durations.append(duration)
-            for n in range(len(variable_values['t'][a])):
-                node_number= P[a][n]
-                ax.text(variable_values['t'][a][n], a, str(node_number), color='black',
-                    ha='center', va='center', fontweight='bold', fontsize= 7)
-                if n >= 1:
-                    ax.plot(variable_values['t'][a][n], a-1+(Short_path_dist(G_a, P[a][n-1], P[a][n])/(variable_values['t'][a][n]-variable_values['t'][a][n-1]))/max_speed_a, 'go', markersize=5)
+#            for n in range(len(variable_values['t'][a])):
+#                node_number= P[a][n]
+#                ax.text(variable_values['t'][a][n], a, str(node_number), color='black',
+#                    ha='center', va='center', fontweight='bold', fontsize= 7)
+#                if n >= 1:
+#                    ax.plot(variable_values['t'][a][n], a-1+(Short_path_dist(G_a, P[a][n-1], P[a][n])/(variable_values['t'][a][n]-variable_values['t'][a][n-1]))/max_speed_a, 'go', markersize=5)
     appear_times_min = []
     
     for i in range(len(appear_times)):
@@ -529,9 +543,13 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
 
     patch = []
     for i in range(N_etvs):
-        patch.append(mpatches.Patch(color=colors[i], label=f'ETV {i+1}'))
+        if i < p['N_etvs_cat1']:
+            patch.append(mpatches.Patch(color=colors[i], label=f'ETV {i+1} normal class'))
+        else:
+            patch.append(mpatches.Patch(color=colors[i], label=f'ETV {i+1} heavy class'))
     patch.append(mpatches.Patch(color='grey', label='Aircraft not towed'))
     patch.append(mpatches.Patch(color='Green', label='Appear time'))
+    patch.append(mpatches.Patch(color='Red', label='End time without delay'))
     ax.legend(handles=patch, loc='upper left')
     
     # Create a figure and axis
@@ -562,7 +580,7 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
     plt.xticks(tick_locations, timestamps, rotation=45, ha='right')
     ax.set_ylabel('ETV')
     ax.set_yticks(range(N_etvs+1))
-    labels = [f'ETV {i+1}' for i in range(N_etvs)]
+    labels = [f'ETV {i+1} normal class' if i < p['N_etvs_cat1'] else f'ETV {i+1} heavy class' for i in range(N_etvs)]
     labels.append('Not towed')
     ax.set_yticklabels(labels)
     blue_patch = mpatches.Patch(color='lightblue', label='Aircraft a towed by ETV')

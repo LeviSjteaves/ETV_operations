@@ -15,7 +15,7 @@ module = import_module('AirportOp_Func_1')
 Plotting = module.Plotting
 
 # Folder containing the saved files
-folder_name = "2024-03-02_14-08-41"
+folder_name = "2024-03-11_14-18-49"
 
 # plot the schedules for each iteration
 plot_schedule = False
@@ -49,9 +49,15 @@ bounds = [iteration['bound_values'] for iteration in iterations]
 times = [iteration['times'] for iteration in iterations]
 gap_per = []
 
+Kg_frac = []
+for k in range(len(iterations)):
+    Kg_kerosene_max = Kg_kerosene[next((i for i, (c1, c2, N_a) in enumerate(zip(ETVs_cat1, ETVs_cat2, N_aircraft)) if c1 == 0 and c2 == 0 and N_a == N_aircraft[k]), None)]
+    Kg_frac.append(Kg_kerosene[k]/Kg_kerosene_max) 
+
+
 
 # Define the maximum number of plots per window
-max_plots_per_window = 4
+max_plots_per_window =5
 
 # Calculate the total number of windows needed
 num_windows = (len(iterations) + max_plots_per_window - 1) // max_plots_per_window
@@ -62,8 +68,11 @@ for window_index in range(num_windows):
     start_index = window_index * max_plots_per_window
     end_index = min((window_index + 1) * max_plots_per_window, len(iterations))
 
-    # Create a single window and subplots
+    # Create figure and axes
     fig, axes = plt.subplots(end_index - start_index, 1, figsize=(8, 6 * (end_index - start_index)))
+
+    if end_index - start_index == 1:  # If only one iteration, adjust axes to be iterable
+        axes = [axes]
 
     # Iterate over plots in this window
     for i, ax in enumerate(axes):
@@ -83,7 +92,7 @@ for window_index in range(num_windows):
         ax2.set_ylabel('Gap %', color='tab:red')
         ax.grid(True)
 
-        ax.set_title(f'Iteration {index} with {ETVs_cat1[index]} ETVs cat 1 and {ETVs_cat2[index]} ETVs cat 2')
+        ax.set_title(f'Iteration {index} with {ETVs_cat1[index]} normal ETVs and {ETVs_cat2[index]} heavy ETVs')
 
         # Add legend
         ax.legend(loc='upper left')
@@ -101,24 +110,10 @@ def create_pie_marker(sizes, x, y, x_max, y_max, markersize, cat1max, cat2max):
     x_nor = markersize/y_max*1.5
     y_nor = markersize/x_max
     colorsb = plt.cm.Blues(np.linspace(0.25, 0.75, cat1max))
-    colorsg = plt.cm.Greens(np.linspace(0.25, 0.75, cat2max))
+    colorsg = plt.cm.Oranges(np.linspace(0.25, 0.75, cat2max))
     patchespie.append(patches.Rectangle((x, y-y_nor), -x_nor, 2*y_nor, color=colorsb[sizes[0]]))
     patchespie.append(patches.Rectangle((x, y-y_nor), x_nor, 2*y_nor, color=colorsg[sizes[1]])) 
     return patchespie
-'''     
-    if sizes[0] == 0 and sizes[1] == 0:
-        patchespie.append(patches.Rectangle((x, y-y_nor), x_nor, 2*y_nor, color='grey'))
-        patchespie.append(patches.Rectangle((x, y-y_nor), -x_nor, 2*y_nor, color='grey'))
-    elif sizes[0] == 0:
-        colorsg = plt.cm.Greens(np.linspace(0, 1, cat2max))
-        patchespie.append(patches.Rectangle((x, y-y_nor), x_nor, 2*y_nor, color=colorsg[sizes[1]+1]))
-        patchespie.append(patches.Rectangle((x, y-y_nor), -x_nor, 2*y_nor, color='grey')) 
-    elif sizes[1] == 0:
-        colorsb = plt.cm.Blues(np.linspace(0, 1, cat1max))
-        patchespie.append(patches.Rectangle((x, y-y_nor), -x_nor, 2*y_nor, color=colorsb[sizes[0]+1]))
-        patchespie.append(patches.Rectangle((x, y-y_nor), x_nor, 2*y_nor, color='grey'))  
-    else:
-'''
     
 pie_marker_list = []
 fig, ax = plt.subplots()
@@ -135,11 +130,11 @@ for i in range(len(iterations)):
     y_max = max(y_set)
     x_min = min(x_set)
     y_min = min(y_set)
-    markersize = 150
+    markersize = 200
     # Create custom pie marker
     pie_marker = create_pie_marker([ETVs_cat1[i], ETVs_cat2[i]], x, y, x_max ,y_max, markersize, cat1max, cat2max) 
     pie_marker_list.append(pie_marker)
-    plt.plot(taxi_delay[i], Kg_kerosene[i], 'o', markersize=3) 
+    plt.plot(taxi_delay[i], Kg_kerosene[i], 'ok', markersize=3) 
 
     positions = [[Kg_kerosene[i]] * len(total_delay[i]) for i in range(len(total_delay))]
 
@@ -153,13 +148,33 @@ for i in range(len(iterations)):
 ax.set_xlabel('Average Taxi delay [min]')
 ax.set_ylabel('Fuel consumption [kg kerosene]')
 legend_elements = [
-    patches.Patch(facecolor=plt.cm.Blues(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs cat. 1'),
-    patches.Patch(facecolor=plt.cm.Greens(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs cat. 2')
+    patches.Patch(facecolor=plt.cm.Blues(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs normal class'),
+    patches.Patch(facecolor=plt.cm.Oranges(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs heavy class')
 ]
 ax.legend(handles=legend_elements)
 plt.xlim(0, None)
 plt.ylim(0, None)
 ax.grid(True)
+
+fig, ax = plt.subplots()
+unique_values = sorted(list(set(N_aircraft)))
+# Assign colors to each unique value
+color_dict = {value: f'C{i}' for i, value in enumerate(unique_values)}
+# Plot the points
+handles = []
+labels = []
+for value in unique_values:
+    mask = [N_aircraft[i] == value for i in range(len(iterations))]
+    handle = plt.scatter([taxi_delay[i] for i, match in enumerate(mask) if match], 
+                         [Kg_frac[i] for i, match in enumerate(mask) if match], 
+                         color=color_dict[value],
+                         label=f'N_aircraft: {value}')
+    handles.append(handle)
+    labels.append(f'N_aircraft: {value}')
+
+# Create legend using handles for unique N_aircraft values
+ax.legend(handles=handles, labels=labels)
+
 
 # Show plot Runtime
 fig, ax = plt.subplots()
@@ -168,21 +183,33 @@ ax.set_xlabel('Costs ETVs [Euro]')
 ax.set_ylabel('Runtime [s]')
 ax.grid(True)
 
+
+fig, ax = plt.subplots()
+categories = ['1','2','3','4','5','6','7','8','9','10']
+cat = iterations[0]['cat']
+if type(cat) == np.ndarray:
+    cat = cat.tolist()
+values = [cat.count(0),cat.count(1),cat.count(2),cat.count(3),cat.count(4),cat.count(5),cat.count(6),cat.count(7),cat.count(8),cat.count(9)]
+plt.bar(categories, values)
+ax.set_xlabel('Aircraft categorie [-]')
+ax.set_ylabel('Amount of occurances [-]')
+
 # Show plot allocation
-if plot_schedule == True:
-    for i in range(len(iterations)):  
-        I_up = iterations[i]['I_up'] 
-        I_do = iterations[i]['I_do']
-        t_min = iterations[i]['t_min']
-        appear_times = iterations[i]['appear_times'] 
-        G_a = iterations[i]['G_a']
-        cat = iterations[i]['cat']
-        dep = iterations[i]['dep'] 
-        E_a_dis =iterations[i]['E_a_dis']
-        E_e_return = iterations[i]['E_e_return']
-        variable_values = iterations[i]['variable_values']
-        P = iterations[i]['P']
-        p = iterations[i]['p']
-        Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, E_e_return, t_min)  
- 
+#if plot_schedule == True:
+#    for i in range(len(iterations)):  
+i=0
+I_up = iterations[i]['I_up'] 
+I_do = iterations[i]['I_do']
+t_min = iterations[i]['t_min']
+appear_times = iterations[i]['appear_times'] 
+G_a = iterations[i]['G_a']
+cat = iterations[i]['cat']
+dep = iterations[i]['dep'] 
+E_a_dis =iterations[i]['E_a_dis']
+E_e_return = iterations[i]['E_e_return']
+variable_values = iterations[i]['variable_values']
+P = iterations[i]['P']
+p = iterations[i]['p']
+Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, E_e_return, t_min)  
+         
     

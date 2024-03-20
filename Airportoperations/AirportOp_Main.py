@@ -37,7 +37,7 @@ APIsave = False # set true when only want to save raw-API data
 save = True     
     
 G_a, G_e = Load_Graph(airport)
-
+sys.exit()
 O_a = []
 D_a = []
 
@@ -52,13 +52,13 @@ if setting == 'manual':
    
 elif setting == 'API':
     date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
-    pagelimit = [20,25]                   #Specify the amount of pages of data [-1] for last page
+    pagelimit = [20,80]                   #Specify the amount of pages of data [-1] for last page
     
     Flight_orig, Flight_dest, appear_times, dep, cat, flightdata, rawflightdata = Load_Aircraft_Info(date_of_interest, pagelimit)
     
     tO_a = appear_times
     gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
-                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':108, '22':98, 'HG':98}
+                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':108,'Y':108, '22':98, 'HG':98, '27':89}
     
     for i in range(len(Flight_orig)):
         O_a.append(gate_runway_locs.get(Flight_orig[i]))   # Origins
@@ -73,7 +73,7 @@ elif setting == 'API':
     
 elif setting == 'saved':
     gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
-                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':108, '22':98, 'HG':98}
+                        'K':99, 'M':102, 'R':79, 'S':107, '18R':3, '36L':3, '18L':92, '36R':92, '18C':17, '06':108, '24':108,'Y':108 , '22':98, 'HG':98, '27':89}
     
     tO_a = np.load('Flight_t.npy')
     appear_times = tO_a
@@ -97,8 +97,8 @@ if APIsave == True:
 
 #Specify all the iterations
 iterations = []
-N_etvs_cat1_i = [0, 1, 2, 3]   # Number of ETVs of category 1
-N_etvs_cat2_i = [0, 1, 2, 3]   # Number of ETVs of category 2
+N_etvs_cat1_i = [0]   # Number of ETVs of category 1
+N_etvs_cat2_i = [0]   # Number of ETVs of category 2
 start_delay_i = [0]  # Allowed start delay
 
 if save == True:
@@ -220,7 +220,7 @@ for it1 in range(len(N_etvs_cat1_i)):
 
             print("MODEL CREATED")
             # set optimization limits
-            model.Params.TimeLimit = 14400 
+            model.Params.TimeLimit = 1800 
             model.Params.OutputFlag = 1 
             model.setParam('MIPGap', 0.05)
             
@@ -232,14 +232,11 @@ for it1 in range(len(N_etvs_cat1_i)):
             times = []
             
             def callback(model, where):
-                if where == GRB.Callback.MIPSOL:
-                    obj_values.append(model.cbGet(GRB.Callback.MIPSOL_OBJ))
-                    gap_values.append(model.cbGet(GRB.Callback.MIPSOL_OBJBST) - model.cbGet(GRB.Callback.MIPSOL_OBJBND))
-                    bound_values.append(model.cbGet(GRB.Callback.MIPSOL_OBJBND))
+                if where == GRB.Callback.MIPNODE:
+                    obj_values.append(model.cbGet(GRB.Callback.MIPNODE_OBJBST))
+                    gap_values.append(model.cbGet(GRB.Callback.MIPNODE_OBJBST) - model.cbGet(GRB.Callback.MIPNODE_OBJBND))
+                    bound_values.append(model.cbGet(GRB.Callback.MIPNODE_OBJBND))
                     times.append(time.time() - start_time)
-                elif where == GRB.Callback.MIPNODE:
-                    counter.append(1)
-                    #model.terminate()
                     
             # Start time
             start_time = time.time()    
