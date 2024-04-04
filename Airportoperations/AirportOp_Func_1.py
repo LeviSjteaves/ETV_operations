@@ -15,6 +15,8 @@ import sys
 import numpy as np
 import matplotlib.patches as mpatches 
 from collections import defaultdict
+from matplotlib.colors import ListedColormap
+import matplotlib.colors as mcolors
 
 #from Functions_basicprob import appeartimes
 from datetime import datetime
@@ -370,6 +372,7 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     model.setObjective(grp.quicksum(Emission[a]  for a in range(N_aircraft))#/N_aircraft
                        +F_delay*grp.quicksum((t[a,len(P[a])-1]-(t_min[a][len(P[a])-1])) for a in range(N_aircraft))
                        , sense=GRB.MINIMIZE)
+    #model.setObjective(grp.quicksum(X[a,i]  for a in range(N_aircraft) for i in range(N_etvs)))#minimize amount of needed ETV
     
     # Constraints////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     print("Adding general constraints....")
@@ -441,6 +444,11 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     
     print("Adding sequencing constraints....")        
     #Ordering of tasks
+    # Addition for min towing vehicles##############
+    #for a in range(N_aircraft):
+        #if cat[a] <8:
+            #model.addConstr(grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][l],i] for l in range(len(I_up[a]))) for i in range(N_etvs)) == 1)
+        ##################
     for i in range(N_etvs):
         model.addConstr(grp.quicksum(X[a,i] for a in range(N_aircraft)) <= 1)
         for a in range(N_aircraft):
@@ -462,10 +470,12 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
         for a in range(N_aircraft):
             for b in range(len(I_up[a])): 
                 if a!=I_up[a][b]:
-                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_dis[a]+ (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock))))*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+(Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / free_speed_e)))*I_ch[i]))+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
-                    model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_dis[a]+ Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*E_e)+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint2_{a}_{b}_{i}")   
-                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] >= E[i, a]-(E_a_dis[a]+ (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock))))*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+(Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]]) / free_speed_e)))*I_ch[i]))-(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
-                    model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] >= E[i, a]-(E_a_dis[a]+ Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*E_e)-(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint2_{a}_{b}_{i}")   
+                    min_dock_dist = (min(Short_path_dist(G_e, D_a[a], dock[c])+Short_path_dist(G_e, dock[c], O_a[I_up[a][b]])for c in range(len(dock))))
+                    a_b_dist = Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])
+                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_dis[a]+ min_dock_dist*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+(a_b_dist / free_speed_e)))*I_ch[i]))+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
+                    model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] <= E[i, a]-(E_a_dis[a]+ a_b_dist*E_e)+(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint2_{a}_{b}_{i}")   
+                    model.addConstr((C[i,a] == 1) >> (E[i, I_up[a][b]] >= E[i, a]-(E_a_dis[a]+ min_dock_dist*E_e-((t[I_up[a][b],0]-(t[a,len(P[a])-1]+(a_b_dist / free_speed_e)))*I_ch[i]))-(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint1_{a}_{b}_{i}")   
+                    model.addConstr((C[i,a] == 0) >> (E[i, I_up[a][b]] >= E[i, a]-(E_a_dis[a]+ a_b_dist*E_e)-(1-(O[a,I_up[a][b],i]))*bat_e[i]*1000), f"available_etv_constraint2_{a}_{b}_{i}")   
                           
     # ETV energy availability
     for i in range(N_etvs): 
@@ -490,6 +500,7 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
     max_speed_a = p['max_speed_a']
     start_delay = p['start_delay']
     t_pushback = p['t_pushback']
+    free_speed_e  = p['free_speed_e']
     
     colors = sns.color_palette('husl', n_colors=N_etvs)
     etv_color = []
@@ -518,12 +529,12 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
             ax.plot(appear_times[a], a, 'go', markersize=7)
             ax.plot((t_min[a][-1]+t_pushback*dep[a]), a, 'ro', markersize=7)
             durations.append(duration)
-#            for n in range(len(variable_values['t'][a])):
-#                node_number= P[a][n]
-#                ax.text(variable_values['t'][a][n], a, str(node_number), color='black',
-#                    ha='center', va='center', fontweight='bold', fontsize= 7)
-#                if n >= 1:
-#                    ax.plot(variable_values['t'][a][n], a-1+(Short_path_dist(G_a, P[a][n-1], P[a][n])/(variable_values['t'][a][n]-variable_values['t'][a][n-1]))/max_speed_a, 'go', markersize=5)
+            for n in range(len(variable_values['t'][a])):
+                node_number= P[a][n]
+                ax.text(variable_values['t'][a][n], a, str(node_number), color='black',
+                    ha='center', va='center', fontweight='bold', fontsize= 7)
+                if n >= 1:
+                    ax.plot(variable_values['t'][a][n], a-1+(Short_path_dist(G_a, P[a][n-1], P[a][n])/(variable_values['t'][a][n]-variable_values['t'][a][n-1]))/max_speed_a, 'go', markersize=5)
     appear_times_min = []
     
     for i in range(len(appear_times)):
@@ -553,63 +564,103 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
     ax.legend(handles=patch, loc='upper left')
     
     # Create a figure and axis
-    fig, ax = plt.subplots()
-    ax.grid(True, which='both', linestyle='--', linewidth=0.5, color='gray')
-
+    fig, ax = plt.subplots(figsize=(18/2.54, 9/2.54))
+    
+    blue_cmap_tot = plt.get_cmap('Blues')
+    blue_cmap = ListedColormap(blue_cmap_tot(np.linspace(0.3, 0.7, 256)))
+    
+    aircraft_etv={}
+    for i in range(N_etvs):
+        aircraft_etv[f'{i}'] = [index for index, value in enumerate(etv_number) if value == i]
+        
+    file_path2 = "EHAM_graph_hand_e.gpickle"
+    
+    G_AMS_e = nx.read_gpickle(file_path2)
+    G_e = G_AMS_e
+    
     # Iterate through aircraft and tasks to plot horizontal bars
     for a in range(N_aircraft): 
             if etv_number[a] != N_etvs:
                 start_time = variable_values['t'][a][0]
                 duration = variable_values['t'][a][len(P[a])-1] - start_time
-                ax.barh(etv_number[a], duration, left=start_time, color='lightblue')
-                ax.text((start_time+0.5*duration), etv_number[a], f'A:{a+1}', color='black',
+                if aircraft_etv[f'{etv_number[a]}'].index(a) != len(aircraft_etv[f'{etv_number[a]}']) - 1:
+                    next_a = aircraft_etv[f'{etv_number[a]}'][aircraft_etv[f'{etv_number[a]}'].index(a)+1]
+                    width_drive =(Short_path_dist(G_e, P[a][-1], P[next_a][0])) / free_speed_e
+                    ax.barh(etv_number[a], width_drive, left=start_time+duration, color='darkkhaki')
+                ax.barh(etv_number[a], duration, left=start_time, color=blue_cmap(cat[a]/10))
+                ax.text((start_time+0.5*duration), etv_number[a], f'{cat[a]+1}', color='black',
                     ha='center', va='center', fontsize= 8)
                 for i in range(len(variable_values['C'])):
                     if variable_values['C'][i][a] == 1:
-                        ax.text(variable_values['t'][a][len(P[a])-1], etv_number[a], str('C'), color='green',
-                            ha='center', va='center', fontweight='bold', fontsize= 12)
+                        if aircraft_etv[f'{etv_number[a]}'].index(a) != len(aircraft_etv[f'{etv_number[a]}']) - 1:
+                            next_a = aircraft_etv[f'{etv_number[a]}'][aircraft_etv[f'{etv_number[a]}'].index(a)+1]
+                            width_drive1 =(Short_path_dist(G_e, P[a][-1], 119)) / free_speed_e
+                            width_drive2 =(Short_path_dist(G_e, 119, P[next_a][0])) / free_speed_e
+                            charge_time = (variable_values['E'][etv_number[next_a]][next_a]-variable_values['E'][etv_number[a]][a])/9
+                        
+                        ax.barh(etv_number[a], width_drive1 , left=variable_values['t'][a][len(P[a])-1], color='darkkhaki')
+                        ax.barh(etv_number[a], charge_time , left=width_drive1+variable_values['t'][a][len(P[a])-1], color='seagreen')
+                        ax.barh(etv_number[a], width_drive2 , left=width_drive1+charge_time+variable_values['t'][a][len(P[a])-1], color='darkkhaki')
+                        #ax.text(variable_values['t'][a][len(P[a])-1], etv_number[a], str('C'), color='green',
+                            #ha='center', va='center', fontweight='bold', fontsize= 12)
             else:
                 start_time = variable_values['t'][a][0]
                 duration = variable_values['t'][a][len(P[a])-1] - start_time
-                ax.barh(etv_number[a], duration, left=start_time, color='grey')
-                ax.text((start_time+0.5*duration), etv_number[a], f'{a+1}', color='black',
-                    ha='center', va='center', fontsize= 8)
-                        
+                #ax.barh(etv_number[a], duration, left=start_time, color='grey')
+                #ax.scatter((start_time+0.5*duration), etv_number[a], color='grey')
+                #if cat[a] >= 5 and cat[a] < 8:
+                    #ax.scatter((start_time+0.5*duration), etv_number[a], color='red')
+                    #ax.text((start_time+0.5*duration), etv_number[a], f'{a+1}', color='black',
+                        #ha='center', va='center', fontsize= 8)
+    
+    norm = mcolors.Normalize(vmin=min(cat)+1, vmax=max(cat)+1)
+    sm = plt.cm.ScalarMappable(cmap=blue_cmap, norm=norm)
+    sm.set_array([]) 
+    cbar = plt.colorbar(sm)
+    cbar.set_label('Aircraft class') 
+                  
     # Set labels and title
     ax.set_xlabel('Time [h]')
     plt.xticks(tick_locations, timestamps, rotation=45, ha='right')
     ax.set_ylabel('ETV')
     ax.set_yticks(range(N_etvs+1))
-    labels = [f'ETV {i+1} normal class' if i < p['N_etvs_cat1'] else f'ETV {i+1} heavy class' for i in range(N_etvs)]
+    labels = [f'ETV {i+1} \n normal class' if i < p['N_etvs_cat1'] else f'ETV {i+1} \n heavy class' for i in range(N_etvs)]
     labels.append('Not towed')
     ax.set_yticklabels(labels)
-    blue_patch = mpatches.Patch(color='lightblue', label='Aircraft a towed by ETV')
-    red_patch = mpatches.Patch(color='red', label='SOC')
-    grey_patch = mpatches.Patch(color='grey', label=' Aircraft not towed')
-    green_patch = mpatches.Patch(color='green', label='Charge-Indicator')
-    ax.legend(handles=[blue_patch, red_patch, grey_patch, green_patch], loc='upper left')
+    blue_patch = mpatches.Patch(color='lightskyblue', label='Towing')
+    red_patch = mpatches.Patch(color='peru', label='Indicating SOC')
+    #grey_patch = mpatches.Patch(color='grey', label=' Aircraft not towed')
+    green_patch = mpatches.Patch(color='seagreen', label='Charging')
+    ride_patch = mpatches.Patch(color='darkkhaki', label='Driving')
+    plt.legend(handles=[blue_patch, red_patch, ride_patch, green_patch], loc='upper center', bbox_to_anchor=(0.5, 1.15), ncol=len(labels),fontsize=7)
+
+    
+    plt.tight_layout()
+    plt.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.5)
+    plt.grid(True, which='minor', linestyle='--', linewidth=0.3, alpha=0.3)
+    plt.minorticks_on()
 
 
         #etv_SOC.append(G_SOC)
     for i in range(N_etvs):
         for a in range(N_aircraft):
                 if variable_values['X'][a][i] == 1:
-                    ax.bar(variable_values['t'][a][0], variable_values['E'][i][a]/bat_e[i], bottom=etv_number[a]-0.5, width=2, color='red')
-                    ax.text(variable_values['t'][a][0], etv_number[a]-0.5+variable_values['E'][i][a]/bat_e[i], round(variable_values['E'][i][a]/bat_e[i],2), color='black',
-                        ha='center', va='center', fontweight='normal', fontsize= 7)
+                    ax.bar(variable_values['t'][a][0], variable_values['E'][i][a]/bat_e[i], bottom=etv_number[a]-0.5, width=1.5, color='peru')
+                    #ax.text(variable_values['t'][a][0], etv_number[a]-0.5+variable_values['E'][i][a]/bat_e[i], round(variable_values['E'][i][a]/bat_e[i],2), color='black',
+                        #ha='center', va='center', fontweight='normal', fontsize= 7)
                     
-                    ax.bar(variable_values['t'][a][len(P[a])-1], (variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]), bottom=etv_number[a]-0.5,width=2,  color='red')
-                    ax.text(variable_values['t'][a][len(P[a])-1], etv_number[a]-0.5+(variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]), round((variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]),2), color='black',
-                            ha='center', va='center', fontweight='normal', fontsize= 7)
+                    ax.bar(variable_values['t'][a][len(P[a])-1], (variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]), bottom=etv_number[a]-0.5,width=1.5,  color='peru')
+                    #ax.text(variable_values['t'][a][len(P[a])-1], etv_number[a]-0.5+(variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]), round((variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]),2), color='black',
+                            #ha='center', va='center', fontweight='normal', fontsize= 7)
                 for b in range(len(I_up[a])): 
                     if variable_values['O'][a][I_up[a][b]][i] == 1: 
-                        ax.bar(variable_values['t'][a][0], variable_values['E'][i][a]/bat_e[i], bottom=etv_number[a]-0.5, width=2, color='red')
-                        ax.text(variable_values['t'][a][0], etv_number[a]-0.5+variable_values['E'][i][a]/bat_e[i], round(variable_values['E'][i][a]/bat_e[i],2), color='black',
-                            ha='center', va='center', fontweight='normal', fontsize= 7)
+                        ax.bar(variable_values['t'][a][0], variable_values['E'][i][a]/bat_e[i], bottom=etv_number[a]-0.5, width=1.5, color='peru')
+                        #ax.text(variable_values['t'][a][0], etv_number[a]-0.5+variable_values['E'][i][a]/bat_e[i], round(variable_values['E'][i][a]/bat_e[i],2), color='black',
+                            #ha='center', va='center', fontweight='normal', fontsize= 7)
                         
-                        ax.bar(variable_values['t'][a][len(P[a])-1], (variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]), bottom=etv_number[a]-0.5,width=2,  color='red')
-                        ax.text(variable_values['t'][a][len(P[a])-1], etv_number[a]-0.5+(variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]), round((variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]),2), color='black',
-                                ha='center', va='center', fontweight='normal', fontsize= 7)
+                        ax.bar(variable_values['t'][a][len(P[a])-1], (variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]), bottom=etv_number[a]-0.5,width=1.5,  color='peru')
+                        #ax.text(variable_values['t'][a][len(P[a])-1], etv_number[a]-0.5+(variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]), round((variable_values['E'][i][a]-(E_a_dis[a]))/(bat_e[i]),2), color='black',
+                                #ha='center', va='center', fontweight='normal', fontsize= 7)
     
  
     return

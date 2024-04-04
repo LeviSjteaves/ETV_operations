@@ -37,7 +37,7 @@ APIsave = False # set true when only want to save raw-API data
 save = True     
     
 G_a, G_e = Load_Graph(airport)
-sys.exit()
+
 O_a = []
 D_a = []
 
@@ -52,7 +52,7 @@ if setting == 'manual':
    
 elif setting == 'API':
     date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
-    pagelimit = [20,80]                   #Specify the amount of pages of data [-1] for last page
+    pagelimit = [55,120]         # 120         #Specify the amount of pages of data [-1] for last page
     
     Flight_orig, Flight_dest, appear_times, dep, cat, flightdata, rawflightdata = Load_Aircraft_Info(date_of_interest, pagelimit)
     
@@ -68,8 +68,8 @@ elif setting == 'API':
         print('Check if all used runways are saved in gate_runway_locs')
         sys.exit()
         
-    #N_aircraft = 3# Number of aircraft
-    N_aircraft = len(O_a)# Number of aircraft
+    N_aircraft = 200# Number of aircraft
+    #N_aircraft = len(O_a)# Number of aircraft
     
 elif setting == 'saved':
     gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
@@ -220,7 +220,7 @@ for it1 in range(len(N_etvs_cat1_i)):
 
             print("MODEL CREATED")
             # set optimization limits
-            model.Params.TimeLimit = 1800 
+            model.Params.TimeLimit = 4500 
             model.Params.OutputFlag = 1 
             model.setParam('MIPGap', 0.05)
             
@@ -291,6 +291,7 @@ for it1 in range(len(N_etvs_cat1_i)):
                 
                 
             Kg_kerosene = ((model.objVal-F_delay*sum((variable_values['t'][a][len(P[a])-1]-(t_min[a][len(P[a])-1])) for a in range(N_aircraft))))
+            
             Costs_etvs = int(1*10**6*N_etvs_cat1+1.5*10**6*N_etvs_cat2)
             
             total_delay=[]
