@@ -83,7 +83,7 @@ def Load_new_file(folder_name):
         gap_per = [abs(bounds[i][-1] - obj[i][-1]) / abs(obj[i][-1])*100]
         gap_percentage.append(gap_per)
         
-folder_name = "2024-03-23_00-09-53"
+folder_name = "2024-04-02_11-58-09"
 Load_new_file(folder_name)
 
 i=0  
@@ -175,6 +175,25 @@ towed=[]
 for a in range(N_aircraft[0]):
     towed.append(sum(variable_values['X'][a][i] + sum(variable_values['O'][a][I_up[a][b]][i] for b in range(len(I_up[a]))) for i in range(ETVs_cat1[0]+ETVs_cat2[0])))    
 
+dep_tow = []
+dep_tot = []
+for i in range(N_aircraft[0]):
+    if dep[i] == 0:
+        dep_tot.append(i)
+        if towed[i] == 1:
+            dep_tow.append(i)
+ 
+towing_veh = {}
+for i in range(ETVs_cat1[0] + ETVs_cat2[0]):
+    towing_veh[i] = []  # Initialize an empty list for each key
+    for a in range(N_aircraft[0]):
+        check = variable_values['X'][a][i] + sum(variable_values['O'][a][I_up[a][b]][i] for b in range(len(I_up[a])))
+        if check == 1:
+            towing_veh[i].append(a)
+            
+
+
+
 # Initialize node_visits with all nodes and zero visits
 node_visits = {node: 0 for node in G_a.nodes}
 node_visits_tot = {node: 0 for node in G_a.nodes}
@@ -189,6 +208,59 @@ for i, path in enumerate(P):
         # Increment the count of visits for nodes visited by towed aircraft
         for node in path:
             node_visits[node] += 1
+            
+node_visits0 = {node: 0 for node in G_a.nodes}    
+node_visits1 = {node: 0 for node in G_a.nodes}    
+node_visits2 = {node: 0 for node in G_a.nodes}    
+node_visits3 = {node: 0 for node in G_a.nodes}    
+node_visits4 = {node: 0 for node in G_a.nodes}         
+# Iterate over each aircraft's path
+for a, path in enumerate(P):
+    # Check if the aircraft is towed
+    if a in towing_veh[0]:
+        # Increment the count of visits for nodes visited by towed aircraft
+        for node in path:
+            node_visits0[node] += 1
+    '''
+    if a in towing_veh[1]:
+        # Increment the count of visits for nodes visited by towed aircraft
+        for node in path:
+            node_visits1[node] += 1
+    if a in towing_veh[2]:
+        # Increment the count of visits for nodes visited by towed aircraft
+        for node in path:
+            node_visits2[node] += 1
+    if a in towing_veh[3]:
+        # Increment the count of visits for nodes visited by towed aircraft
+        for node in path:
+            node_visits3[node] += 1
+    if a in towing_veh[4]:
+        # Increment the count of visits for nodes visited by towed aircraft
+        for node in path:
+            node_visits4[node] += 1
+  '''          
+
+node_colors0 = ['grey' if node_visits0[node]  == 0 else 'red' for node in G_a.nodes()]
+node_colors1 = ['grey' if node_visits1[node]  == 0 else 'blue' for node in G_a.nodes()]
+node_colors2 = ['grey' if node_visits2[node]  == 0 else 'green' for node in G_a.nodes()]
+node_colors3 = ['grey' if node_visits3[node]  == 0 else 'orange' for node in G_a.nodes()]
+node_colors4 = ['grey' if node_visits4[node]  == 0 else 'purple' for node in G_a.nodes()]
+
+         
+            
+fig, ax = plt.subplots(figsize=(18/2.54, 12/2.54))
+node_positions_a = nx.get_node_attributes(G_a, 'pos')   
+nx.draw_networkx_nodes(G_a, pos=node_positions_a, ax=ax, node_color=node_colors0, node_size=[node_visits0[node]*5 for node in G_a.nodes()], alpha=0.6)  
+fig, ax = plt.subplots(figsize=(18/2.54, 12/2.54))    
+nx.draw_networkx_nodes(G_a, pos=node_positions_a, ax=ax, node_color=node_colors1, node_size=[node_visits1[node]*3 for node in G_a.nodes()], alpha=0.6)  
+fig, ax = plt.subplots(figsize=(18/2.54, 12/2.54))    
+nx.draw_networkx_nodes(G_a, pos=node_positions_a, ax=ax, node_color=node_colors2, node_size=[node_visits2[node]*3 for node in G_a.nodes()], alpha=0.6)    
+fig, ax = plt.subplots(figsize=(18/2.54, 12/2.54))  
+nx.draw_networkx_nodes(G_a, pos=node_positions_a, ax=ax, node_color=node_colors3, node_size=[node_visits3[node]*3 for node in G_a.nodes()], alpha=0.6)  
+fig, ax = plt.subplots(figsize=(18/2.54, 12/2.54))    
+nx.draw_networkx_nodes(G_a, pos=node_positions_a, ax=ax, node_color=node_colors4, node_size=[node_visits4[node]*3 for node in G_a.nodes()], alpha=0.6)           
+              
+
             
 
 edge_tuples = [(edge[0], edge[1]) for edge in G_a.edges]        
@@ -214,7 +286,7 @@ per_node_visit = [int(node_visits[i]/node_visits_tot[i] *100) if node_visits_tot
 #per_edge_visit = [int(edge_visits[i]/edge_visits_tot[i] *100) if edge_visits_tot[i] > 0 else 0 for i in edge_visits]
 per_edge_visit = {(edge[0], edge[1]): int(edge_visits[edge]/edge_visits_tot[edge] * 100) if edge_visits_tot[edge] > 0 else 0 for edge in edge_visits}
 
-max_scale = 35
+max_scale = 14
 blue_cmap_tot = plt.get_cmap('rainbow')
 blue_cmap = ListedColormap(blue_cmap_tot(np.linspace(0.2,0.9, max_scale)))
 
@@ -233,6 +305,7 @@ node_positions_a = nx.get_node_attributes(G_a, 'pos')
 
 nx.draw_networkx_edges(G_a, pos=node_positions_a, ax=ax, edge_color=[edge_colors[edge] for edge in edge_tuples], width=edge_widths, style='solid', arrows=False)
 nx.draw_networkx_nodes(G_a, pos=node_positions_a, ax=ax, node_color=node_colors, node_size=node_widths)    
+nx.draw_networkx_nodes(G_a, pos=node_positions_a, ax=ax, node_color=node_colors0, node_size=[node_visits0[node]*5 for node in G_a.nodes()], alpha=0.6) 
 
 sm = ScalarMappable(cmap=blue_cmap, norm=plt.Normalize(vmin=0, vmax=max_scale))
 sm.set_array([])

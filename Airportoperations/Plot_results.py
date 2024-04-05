@@ -13,6 +13,8 @@ import matplotlib.patches as patches
 from matplotlib.markers import MarkerStyle
 from importlib import import_module
 import networkx as nx
+from matplotlib.lines import Line2D
+import matplotlib.patches as mpatches 
 from matplotlib.colors import ListedColormap
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
@@ -171,7 +173,7 @@ for k in range(len(iterations)):
 
 fig, ax = plt.subplots(figsize=(9/2.54, 8/2.54))
 
-blue_cmap_tot = plt.get_cmap('Blues')
+blue_cmap_tot = plt.get_cmap('Oranges')
 blue_cmap = ListedColormap(blue_cmap_tot(np.linspace(0.2, 1, 256)))
 color_dict = {value: blue_cmap(i / len(allowed_delay)) for i, value in enumerate(allowed_delay) if ETVs_cat2[i] == 2 }
 handles = []
@@ -238,8 +240,8 @@ for i in range(len(iterations)):
         emissions = [iterations[i]['variable_values']['Emission'][k] for k in range(N_aircraft[i])]
 Max_cons = sum(emissions) 
 
-Max_reduction_1 = (1-(Max_cons-sum(emission for emission, cat_val in zip(emissions, cat) if cat_val < 5))/Kg_kerosene_max)
-Max_reduction_2 = (1-(Max_cons-sum(emission for emission, cat_val in zip(emissions, cat) if cat_val < 8))/Kg_kerosene_max)
+Max_reduction_1 = (1-(Max_cons-sum(emission for emission, cat_val in zip(emissions, cat) if cat_val < 5))/Kg_kerosene_max)*100
+Max_reduction_2 = (1-(Max_cons-sum(emission for emission, cat_val in zip(emissions, cat) if cat_val < 8))/Kg_kerosene_max)*100
 
 for i in range(len(Kg_frac)):
     if ETVs_cat1[i] > 0:
@@ -260,12 +262,12 @@ cat2max =max(ETVs_cat2)+1
 
 # Define your data  
 x_set = [ETVs_cat1[i]+ETVs_cat2[i] for i in range(len(iterations))]
-y_set = [Kg_frac[k] for k in range(len(Kg_frac))]
+y_set_f = [Kg_frac[k] for k in range(len(Kg_frac))]
    
 handles = []        
-handle1 = plt.scatter([x_set[i]for i in range(len(iterations)) if x_set[i] != 0], [y_set[i]for i in range(len(iterations)) if x_set[i] != 0], c=[gap_percentage[i]for i in range(len(iterations)) if x_set[i] != 0], cmap=blue_cmap,s=20)
+handle1 = plt.scatter([x_set[i]for i in range(len(iterations)) if x_set[i] != 0], [y_set_f[i]for i in range(len(iterations)) if x_set[i] != 0], c=[gap_percentage[i]for i in range(len(iterations)) if x_set[i] != 0], cmap=blue_cmap,s=20)
  
-handle2 = plt.scatter([ETVs_cat2[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], [y_set[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], c=[gap_percentage[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], cmap=O_cmap,s=20)
+handle2 = plt.scatter([ETVs_cat2[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], [y_set_f[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], c=[gap_percentage[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], cmap=O_cmap,s=20)
 
 plt.scatter([ETVs_cat1[i]for i in range(len(iterations)) if ETVs_cat1[i] != 0], [Kg_frac_dual[i]for i in range(len(iterations)) if ETVs_cat1[i] != 0], color = 'C0',marker=MarkerStyle(1),s=5)
 plt.scatter([ETVs_cat2[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], [Kg_frac_dual[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], color = 'peru',marker=MarkerStyle(1),s=5)
@@ -350,6 +352,72 @@ plt.ylim(0, None)
 ax.grid(True)
 plt.tight_layout()   
 
+##################################################################
+#COMBINDED PLOT
+# Create a figure and gridspec layout
+fig = plt.figure(figsize=(9/2.54, 14/2.54))
+gs = fig.add_gridspec(2, 1, height_ratios=[1, 1])
+
+# First subplot (fuel consumption)
+ax1 = fig.add_subplot(gs[0])
+handles = []    
+plt.tick_params(axis='x', labelbottom=False)     
+handle1 = plt.scatter([x_set[i]for i in range(len(iterations)) if x_set[i] != 0], [y_set_f[i]for i in range(len(iterations)) if x_set[i] != 0], c=[gap_percentage[i]for i in range(len(iterations)) if x_set[i] != 0], cmap=blue_cmap,s=20)
+ 
+handle2 = plt.scatter([ETVs_cat2[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], [y_set_f[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], c=[gap_percentage[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], cmap=O_cmap,s=20)
+
+plt.scatter([ETVs_cat1[i]for i in range(len(iterations)) if ETVs_cat1[i] != 0], [Kg_frac_dual[i]for i in range(len(iterations)) if ETVs_cat1[i] != 0], color = 'C0',marker=MarkerStyle(1),s=5)
+plt.scatter([ETVs_cat2[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], [Kg_frac_dual[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], color = 'peru',marker=MarkerStyle(1),s=5)
+   
+plt.axhline(y=Max_reduction_1, color='C0', linestyle='--', label='Horizontal Line', linewidth=0.5)
+plt.axhline(y=Max_reduction_2, color='peru', linestyle='--', label='Horizontal Line', linewidth=0.5)
+ 
+# Second subplot (taxi delay)
+ax2 = fig.add_subplot(gs[1], sharex=ax1)
+handles = []    
+   
+handle1 = plt.scatter([x_set[i]for i in range(len(iterations)) if x_set[i] != 0], [y_set[i]for i in range(len(iterations)) if x_set[i] != 0], c=[gap_percentage[i]for i in range(len(iterations)) if x_set[i] != 0], cmap=blue_cmap,s=20)
+
+handle2 = plt.scatter([ETVs_cat2[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], [y_set[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], c=[gap_percentage[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], cmap=O_cmap,s=20)
+# Common colorbar
+
+cbar_ax = fig.add_axes([0.6, 0.95, 0.3, 0.02])  # Adjust these values as needed
+cbar = plt.colorbar(handle1, cax=cbar_ax, orientation='horizontal')
+plt.tick_params(axis='x', labelbottom=False)
+cbar.ax.xaxis.set_label_position('top')
+cbar.set_label(r'Optimality gap $[\%]$')
+
+cbar_ax = fig.add_axes([0.6, 0.92, 0.3, 0.02])  # Adjust these values as needed
+cbar = plt.colorbar(handle2, cax=cbar_ax, orientation='horizontal')
+
+#yticks = [25,50,75]
+# Common legend
+
+
+legend_elements = [
+    patches.Patch(facecolor=plt.cm.Blues(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs normal class'),
+    patches.Patch(facecolor=plt.cm.Oranges(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs heavy class'),
+    Line2D([0], [0], marker= MarkerStyle(1), color='k', label='Dual bound', markersize=5, linestyle='None')
+]
+ax1.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.5, 1.3), ncol=1,fontsize=7)
+
+#labels
+ax2.set_xlabel(r'ETV-fleet size $|\mathcal{I}_e|$', fontsize=10)
+ax1.set_ylabel(r'Fuel savings [\%]',fontsize=10)
+ax2.set_ylabel(r'Avg. Taxi delay [min]',fontsize=10)
+
+# grids
+ax1.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.5)
+ax1.grid(True, which='minor', linestyle='--', linewidth=0.3, alpha=0.3)
+ax1.minorticks_on()
+ax1.grid(True)
+ax2.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.5)
+ax2.grid(True, which='minor', linestyle='--', linewidth=0.3, alpha=0.3)
+ax2.minorticks_on()
+ax2.grid(True)
+
+plt.tight_layout()
+plt.show()
 ##################################################################
 #ETV COMPOSITION PLOT fuel consumption DIFFERENT APLPHA
 # Folder containing the saved files
@@ -475,8 +543,8 @@ for i in range(len(iterations)):
     #vp = plt.violinplot(total_delay[i],positions=range(int(y_set[i]),int(y_set[i])+1),vert=False,widths=1,)
     vp = ax.violinplot(total_delay[i],positions=range(int(y_set[i]),int(y_set[i])+1),vert=False,widths=1.5,showmedians=False,showmeans=True)
     for pc in vp['bodies']:
-        pc.set_color('C0')
-        pc.set_facecolor('C0')
+        pc.set_color('peru')
+        pc.set_facecolor('peru')
         pc.set_alpha(0.80)
     for partname in ('cbars', 'cmins', 'cmaxes','cmeans'):
         vp[partname].set_edgecolor('black')
@@ -529,19 +597,32 @@ for k in range(len(iterations)):
 fig, ax = plt.subplots(figsize=(9/2.54, 4.5/2.54))
 
 # Assign color
-blue_cmap_tot = plt.get_cmap('Blues_r')
+blue_cmap_tot = plt.get_cmap('Oranges_r')
 blue_cmap = ListedColormap(blue_cmap_tot(np.linspace(0.0, 0.8, 256)))
 
 # Plot the points
 handles = []
-handle = plt.scatter([N_aircraft],  [Kg_frac], c=gap_percentage, cmap=blue_cmap,s=10)
-plt.scatter([N_aircraft],  [Kg_frac_dual], color = 'k',marker=MarkerStyle(1),s=5)
+handle = plt.scatter([N_aircraft[i] for i in range(len(iterations)) if ETVs_cat2[i] != 0 ],  
+                     [Kg_frac[i] for i in range(len(iterations)) if ETVs_cat2[i] != 0], 
+                     c=[gap_percentage[i] for i in range(len(iterations)) if ETVs_cat2[i] != 0], 
+                     cmap=blue_cmap,
+                     s=10)
+plt.scatter([N_aircraft[i] for i in range(len(iterations)) if ETVs_cat2[i] != 0 ],  
+            [Kg_frac_dual[i] for i in range(len(iterations)) if ETVs_cat2[i] != 0], 
+            color = 'k',marker=MarkerStyle(1),s=5)
 #ax2 = ax.twinx()  # Create a twin axes sharing the same x-axis
 #ax2.plot(N_aircraft_c, charges, color='grey')  # Plot second scatter plot on the twin axes
 
 
-ax.set_xlabel( r'$|\mathcal{I}_a|$',fontsize=10)
+ax.set_xlabel( r'Amount of aircraft $|\mathcal{I}_a|$',fontsize=10)
 ax.set_ylabel(r'Fuel savings [\%]',fontsize=10)
+
+# Create custom markers
+marker1, = plt.plot([], marker='o', linestyle='None', color='Orange', markersize=3, label='Primal')
+marker2, = plt.plot([], marker= MarkerStyle(1), linestyle='None', color='k', markersize=3, label='Dual')
+
+# Add legend with custom markers
+plt.legend(handles=[marker1, marker2])
 
 plt.gca().yaxis.set_major_locator(ticker.MaxNLocator(nbins=6)) 
 plt.gca().xaxis.set_major_locator(ticker.MaxNLocator(nbins=10)) 
@@ -564,7 +645,7 @@ Load_new_file(folder_name)
 Kg_frac_b =[]
 for k in range(len(iterations)):
     Kg_kerosene_max = Kg_kerosene[next((i for i, (c1, c2, N_a) in enumerate(zip(ETVs_cat1, ETVs_cat2, N_aircraft)) if c1 == 0 and c2 == 0 and N_a == N_aircraft[k]), None)]
-    Kg_frac.append((1-Kg_kerosene[k]/Kg_kerosene_max)) 
+    Kg_frac.append((1-Kg_kerosene[k]/Kg_kerosene_max)*100) 
     Kg_frac_b.append((1-bounds[k][-1]/Kg_kerosene_max)*100) 
 
 fig, ax = plt.subplots(figsize=(9/2.54, 8/2.54))
@@ -575,7 +656,7 @@ unique_values_cat2 = sorted(list(set(ETVs_cat2)))
 unique_values_combined = [(1,0),(2,0),(0,1),(1,1),(0,2),(2,1),(1,2),(2,2)]
 
 # Assign colors to each unique value combination
-blue_cmap_tot = plt.get_cmap('Blues')
+blue_cmap_tot = plt.get_cmap('Oranges')
 blue_cmap = ListedColormap(blue_cmap_tot(np.linspace(0.2, 1, 256)))
 color_dict = {value: blue_cmap(i / len(unique_values_combined)) for i, value in enumerate(unique_values_combined)}
 
@@ -614,7 +695,7 @@ for value in unique_values_combined:
     plt.plot(x_values, y_values, color=color_dict[value], linestyle='-', linewidth=1) 
 '''
 
-ax.set_xlabel( r'$|\mathcal{I}_a|$',fontsize=10)
+ax.set_xlabel( r'Amount of aircraft $|\mathcal{I}_a|$',fontsize=10)
 ax.set_ylabel(r'Fuel savings [\%]',fontsize=10)
 
 # Create legend using handles for unique N_aircraft values
@@ -697,7 +778,7 @@ plt.show()
 
 ###################################################################
 # Show plot allocation
-folder_name = "2024-04-02_11-58-09"
+folder_name = "2024-03-23_00-09-53"
 Load_new_file(folder_name)
 
 #for k in range(len(iterations)):
@@ -721,11 +802,6 @@ if plot_scheme == True:
         p = iterations[i]['p']
         Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, E_e_return, t_min) 
  
-
-#################################################################
-#Info
-#folder_name = "2024-03-23_00-09-53"
-#Load_new_file(folder_name)
 
 towed=[]   
 for a in range(N_aircraft[0]):
@@ -757,5 +833,9 @@ cat_dict_polder['towed'] = {i: f'{cat_polder.count(i)}' for i in [3, 4, 6, 7, 8,
 cat_dict_polder['per'] = {i: f'{cat_polder.count(i) / cat_polder_tot.count(i)*100}' for i in [3, 4, 7, 8, 9]}
 
 
+#################################################################
+#Info
+folder_name = "2024-03-22_10-35-15"
+Load_new_file(folder_name)
             
             
