@@ -12,13 +12,10 @@ import matplotlib.ticker as ticker
 import matplotlib.patches as patches
 from matplotlib.markers import MarkerStyle
 from importlib import import_module
-import networkx as nx
-from matplotlib.lines import Line2D
-import matplotlib.patches as mpatches 
 from matplotlib.colors import ListedColormap
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.linear_model import Ridge
+
+plot_scheme = False
+comp_plots = True
 
 global iterations,Runtime,taxi_delay,total_delay,Kg_kerosene,Costs_etvs,ETVs_cat1,ETVs_cat2,allowed_delay,N_aircraft,obj,gap,bounds,times,gap_per,Kg_frac,gap_percentage
 
@@ -46,8 +43,6 @@ plt.rcParams['font.family'] = 'serif'
 
 module = import_module('AirportOp_Func_1')
 Plotting = module.Plotting
-plot_scheme = True
-comp_plots = False
 
 #close all open plots
 plt.close('all')
@@ -81,7 +76,6 @@ def Load_new_file(folder_name):
             iterations.append(loaded_dict)  # Append the loaded dictionary to the list
     # Define global variables
     # Clear previous data
-
     Runtime = [iteration['Runtime'] for iteration in iterations] 
     taxi_delay = [iteration['Taxi_delay'] for iteration in iterations]
     total_delay = [iteration['Total_delay'] for iteration in iterations]
@@ -106,6 +100,8 @@ def Load_new_file(folder_name):
 #################################################################
 #COMPUTATION PLOTS
 if comp_plots == True:
+    folder_name = "2024-03-22_10-35-15"
+    Load_new_file(folder_name) 
     # Define the maximum number of plots per window
     max_plots_per_window =5
     
@@ -118,7 +114,6 @@ if comp_plots == True:
     
     # Create and iterate over windows
     for window_index in range(num_windows):
-        # Calculate the start and end index for the plots in this window
         start_index = window_index * max_plots_per_window
         end_index = min((window_index + 1) * max_plots_per_window, len(iterations))
     
@@ -192,7 +187,7 @@ for i in range(len(allowed_delay)):
         handles.append(handle)
         labels.append(r'$t_\textrm{w}^a=$'f'{allowed_delay[i]}')
 
-# Create legend using handles for unique N_aircraft values
+# Create legend
 ax.legend(handles=handles, labels=labels, fontsize=8)
 ax.set_ylabel(r'Fuel savings [\%]',fontsize=10)
 ax.set_xlabel(r'Avg. Taxi delay [min]',fontsize=10)
@@ -207,7 +202,6 @@ plt.xlim(0, 6)
 
 ##################################################################
 #ETV COMPOSITION PLOT fuel consumption
-# Folder containing the saved files
 folder_name = "2024-03-08_22-30-15_2"
 Load_new_file(folder_name)
 
@@ -230,7 +224,7 @@ for k in range(len(iterations)):
     Kg_kerosene_max_dual = Kg_kerosene_dual[next((i for i, (c1, c2, N_a) in enumerate(zip(ETVs_cat1, ETVs_cat2, N_aircraft)) if c1 == 0 and c2 == 0 and N_a == N_aircraft[k]), None)]
     Kg_frac_dual.append((1-Kg_kerosene_dual[k]/Kg_kerosene_max_dual)*100) 
     
-fig, ax = plt.subplots(figsize=(9/2.54, 5.3/2.54))
+fig, ax = plt.subplots(figsize=(13/2.54, 5.3/2.54))
 
 #Kg_kerosene_max = Kg_kerosene[next((i for i, (c1, c2, N_a) in enumerate(zip(ETVs_cat1, ETVs_cat2, N_aircraft)) if c1 == 0 and c2 == 0 and N_a == N_aircraft[k]), None)]
 cat = iterations[0]['cat']
@@ -259,8 +253,7 @@ pie_marker_list = []
 cat1max =max(ETVs_cat1)+1
 cat2max =max(ETVs_cat2)+1
 # Plot a point at (0, 0) and add custom pie marker
-
-# Define your data  
+ 
 x_set = [ETVs_cat1[i]+ETVs_cat2[i] for i in range(len(iterations))]
 y_set_f = [Kg_frac[k] for k in range(len(Kg_frac))]
    
@@ -282,7 +275,7 @@ legend_elements = [
     patches.Patch(facecolor=plt.cm.Blues(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs normal class'),
     patches.Patch(facecolor=plt.cm.Oranges(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs heavy class'),
 ]
-ax.legend(handles=legend_elements,fontsize=8)
+#ax.legend(handles=legend_elements,fontsize=8)
 plt.gca().yaxis.set_major_locator(ticker.MaxNLocator(nbins=6)) 
 plt.gca().xaxis.set_major_locator(ticker.MaxNLocator(nbins=10))
 plt.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.5)
@@ -304,11 +297,10 @@ plt.show()
 
 ##################################################################
 #ETV COMPOSITION PLOT taxi delay
-# Folder containing the saved files
 folder_name = "2024-03-08_22-30-15_2"
 Load_new_file(folder_name)
 
-fig, ax = plt.subplots(figsize=(9/2.54, 5.3/2.54))
+fig, ax = plt.subplots(figsize=(13/2.54, 5.3/2.54))
 
 # Assign color
 blue_cmap_tot = plt.get_cmap('Blues_r')
@@ -322,7 +314,6 @@ pie_marker_list = []
 cat1max =max(ETVs_cat1)+1
 cat2max =max(ETVs_cat2)+1
  
-# Define your data  
 x_set = [ETVs_cat1[i]+ETVs_cat2[i] for i in range(len(iterations))]
 y_set = [taxi_delay[k] for k in range(len(taxi_delay))]
 
@@ -341,7 +332,7 @@ legend_elements = [
     patches.Patch(facecolor=plt.cm.Blues(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs normal class'),
     patches.Patch(facecolor=plt.cm.Oranges(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs heavy class'),
 ]
-ax.legend(handles=legend_elements,fontsize=8)
+#ax.legend(handles=legend_elements,fontsize=8)
 plt.gca().yaxis.set_major_locator(ticker.MaxNLocator(nbins=6)) 
 plt.gca().xaxis.set_major_locator(ticker.MaxNLocator(nbins=10))
 plt.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.5)
@@ -379,25 +370,21 @@ handles = []
 handle1 = plt.scatter([x_set[i]for i in range(len(iterations)) if x_set[i] != 0], [y_set[i]for i in range(len(iterations)) if x_set[i] != 0], c=[gap_percentage[i]for i in range(len(iterations)) if x_set[i] != 0], cmap=blue_cmap,s=20)
 
 handle2 = plt.scatter([ETVs_cat2[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], [y_set[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], c=[gap_percentage[i]for i in range(len(iterations)) if ETVs_cat2[i] != 0], cmap=O_cmap,s=20)
-# Common colorbar
 
-cbar_ax = fig.add_axes([0.6, 0.95, 0.3, 0.02])  # Adjust these values as needed
+# Common colorbar
+cbar_ax = fig.add_axes([0.6, 0.95, 0.3, 0.02])  
 cbar = plt.colorbar(handle1, cax=cbar_ax, orientation='horizontal')
 plt.tick_params(axis='x', labelbottom=False)
 cbar.ax.xaxis.set_label_position('top')
 cbar.set_label(r'Optimality gap $[\%]$')
 
-cbar_ax = fig.add_axes([0.6, 0.92, 0.3, 0.02])  # Adjust these values as needed
+cbar_ax = fig.add_axes([0.6, 0.92, 0.3, 0.02])  
 cbar = plt.colorbar(handle2, cax=cbar_ax, orientation='horizontal')
-
-#yticks = [25,50,75]
-# Common legend
-
 
 legend_elements = [
     patches.Patch(facecolor=plt.cm.Blues(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs normal class'),
     patches.Patch(facecolor=plt.cm.Oranges(np.linspace(0.25, 0.75, cat1max))[int(cat1max/2)], label='ETVs heavy class'),
-    Line2D([0], [0], marker= MarkerStyle(1), color='k', label='Dual bound', markersize=5, linestyle='None')
+    #Line2D([0], [0], marker= MarkerStyle(1), color='k', label='Dual bound', markersize=5, linestyle='None')
 ]
 ax1.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.5, 1.3), ncol=1,fontsize=7)
 
@@ -418,11 +405,16 @@ ax2.grid(True)
 
 plt.tight_layout()
 plt.show()
+
 ##################################################################
 #ETV COMPOSITION PLOT fuel consumption DIFFERENT APLPHA
-# Folder containing the saved files
 folder_name = "2024-03-08_22-30-15_4"
 Load_new_file(folder_name)
+
+Kg_frac = []
+for k in range(len(iterations)):
+    Kg_kerosene_max = Kg_kerosene[next((i for i, (c1, c2, N_a) in enumerate(zip(ETVs_cat1, ETVs_cat2, N_aircraft)) if c1 == 0 and c2 == 0 and N_a == 200), None)]
+    Kg_frac.append((1-Kg_kerosene[k]/Kg_kerosene_max)*100) 
 
 fig, ax = plt.subplots(figsize=(9/2.54, 4.5/2.54))
 
@@ -436,19 +428,14 @@ for i in range(len(iterations)):
 import matplotlib.colors as mcolors    
 # Plot the points
 handles = []
-handle = plt.scatter([ETVs_cat1[i]+ETVs_cat2[i] for i in range(len(iterations))],  taxi_delay, c=alpha, cmap=blue_cmap,s=10,norm=mcolors.LogNorm())
+handle = plt.scatter([ETVs_cat1[i]+ETVs_cat2[i] for i in range(len(iterations))],  Kg_frac, c=alpha, cmap=blue_cmap,s=10,norm=mcolors.LogNorm())
 
-
-#cbar = plt.colorbar(handle)
 cbar = plt.colorbar(handle, norm=mcolors.LogNorm())
 cbar.set_label(r'alpha')
 plt.show()
  
 ax.set_xlabel(r'ETV-fleet size $|\mathcal{I}_e|$',fontsize=10)
-ax.set_ylabel(r'$m_f$',fontsize=10)
-#ax.set_ylabel('$\sum_{a \in \mathcal{I}_a}(t^a_{\mathrm{end}}-t_a^{\mathrm{min}})$',fontsize=10)
-
-ax.legend(handles=legend_elements,fontsize=8)
+ax.set_ylabel(r'Fuel savings [\%]',fontsize=10)
 plt.gca().yaxis.set_major_locator(ticker.MaxNLocator(nbins=6)) 
 plt.gca().xaxis.set_major_locator(ticker.MaxNLocator(nbins=10))
 plt.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.5)
@@ -478,9 +465,7 @@ cat1max =max(ETVs_cat1)+1
 cat2max =max(ETVs_cat2)+1
 colorsb = plt.cm.Blues(np.linspace(0.1, 0.8, cat1max))
 colorsg = plt.cm.Oranges(np.linspace(0.1, 0.8, cat2max))
-# Plot a point at (0, 0) and add custom pie marker
 for i in range(len(iterations)):  
-    # Define your data  
     x_set = [ETVs_cat1[i]+ETVs_cat2[i] for i in range(len(iterations))]
     y_set = [Kg_frac[i] for k in range(len(taxi_delay))]
     x = x_set[i]
@@ -492,11 +477,9 @@ for i in range(len(iterations)):
     plt.scatter(x_set[i], y_set[i], marker=MarkerStyle('o', fillstyle='left'), s=250, color=colorsb[ETVs_cat1[i]]) 
     plt.scatter(x_set[i], y_set[i], marker=MarkerStyle('o', fillstyle='right'), s=250, color=colorsg[ETVs_cat2[i]])
     plt.scatter(x_set[i], y_set[i], s=2.5,  color='k')
-    #positions = [[Kg_kerosene[i]] * len(total_delay[i]) for i in range(len(total_delay))]
     ax.text(x_set[i], y_set[i], f'{ETVs_cat1[i]}  {ETVs_cat2[i]}', ha='center', va='center', fontsize=8)
 
-for i in range(len(iterations)):  
-    # Define your data  
+for i in range(len(iterations)):   
     x_set = [ETVs_cat1[i]+ETVs_cat2[i] for i in range(len(iterations))]
     y_set = [Kg_frac[i] for k in range(len(taxi_delay))]
     x = x_set[i]
@@ -513,8 +496,6 @@ ax.legend(handles=legend_elements,fontsize=8)
 plt.gca().yaxis.set_major_locator(ticker.MaxNLocator(nbins=6)) 
 plt.gca().xaxis.set_major_locator(ticker.MaxNLocator(nbins=12))
 plt.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.5)
-#plt.grid(True, which='minor', linestyle='--', linewidth=0.3, alpha=0.3)
-#plt.minorticks_on()
 plt.xlim(0, None)
 plt.ylim(0, None)
 ax.grid(True)
@@ -526,9 +507,7 @@ folder_name = "2024-03-08_22-30-15_3"
 Load_new_file(folder_name)
 
 fig, ax = plt.subplots(figsize=(9/2.54, 9/2.54))
-# Plot a point at (0, 0) and add custom pie marker
 for i in range(len(iterations)):  
-    # Define your data  
     x_set = taxi_delay
     y_set = ETVs_cat2
     x = x_set[i]
@@ -540,7 +519,6 @@ for i in range(len(iterations)):
 
     # Plot violin/boxplot
     #plt.boxplot(total_delay[i],positions=range(int(y_set[i]),int(y_set[i])+1),widths= 0.5,vert=False, whis=10)
-    #vp = plt.violinplot(total_delay[i],positions=range(int(y_set[i]),int(y_set[i])+1),vert=False,widths=1,)
     vp = ax.violinplot(total_delay[i],positions=range(int(y_set[i]),int(y_set[i])+1),vert=False,widths=1.5,showmedians=False,showmeans=True)
     for pc in vp['bodies']:
         pc.set_color('peru')
@@ -548,7 +526,7 @@ for i in range(len(iterations)):
         pc.set_alpha(0.80)
     for partname in ('cbars', 'cmins', 'cmaxes','cmeans'):
         vp[partname].set_edgecolor('black')
-        vp[partname].set_linewidth(1.5)  # Optional: Set the linewidth of the edges
+        vp[partname].set_linewidth(1.5) 
 
 
 ax.set_xlabel('$t$ [min]',fontsize=10)
@@ -562,7 +540,6 @@ plt.ylim(0, None)
 plt.tight_layout()
 ax.grid(True)
 
-
 ################################################################
 #AMOUNT OF AIRCRAFT: SINGLE ETV
 folder_name = "2024-03-11_14-18-49_3"
@@ -570,7 +547,6 @@ Load_new_file(folder_name)
 
 N_aircraft_c = []
 charges = []
-
 
 for i in range(len(iterations)):
     if iterations[i]['p']['N_etvs'] > 0  :
@@ -607,11 +583,11 @@ handle = plt.scatter([N_aircraft[i] for i in range(len(iterations)) if ETVs_cat2
                      c=[gap_percentage[i] for i in range(len(iterations)) if ETVs_cat2[i] != 0], 
                      cmap=blue_cmap,
                      s=10)
-plt.scatter([N_aircraft[i] for i in range(len(iterations)) if ETVs_cat2[i] != 0 ],  
-            [Kg_frac_dual[i] for i in range(len(iterations)) if ETVs_cat2[i] != 0], 
-            color = 'k',marker=MarkerStyle(1),s=5)
+#plt.scatter([N_aircraft[i] for i in range(len(iterations)) if ETVs_cat2[i] != 0 ],  
+            #[Kg_frac_dual[i] for i in range(len(iterations)) if ETVs_cat2[i] != 0], 
+            #color = 'k',marker=MarkerStyle(1),s=5)
 #ax2 = ax.twinx()  # Create a twin axes sharing the same x-axis
-#ax2.plot(N_aircraft_c, charges, color='grey')  # Plot second scatter plot on the twin axes
+#ax2.plot(N_aircraft_c, charges, color='grey') 
 
 
 ax.set_xlabel( r'Amount of aircraft $|\mathcal{I}_a|$',fontsize=10)
@@ -621,8 +597,7 @@ ax.set_ylabel(r'Fuel savings [\%]',fontsize=10)
 marker1, = plt.plot([], marker='o', linestyle='None', color='Orange', markersize=3, label='Primal')
 marker2, = plt.plot([], marker= MarkerStyle(1), linestyle='None', color='k', markersize=3, label='Dual')
 
-# Add legend with custom markers
-plt.legend(handles=[marker1, marker2])
+#plt.legend(handles=[marker1, marker2])
 
 plt.gca().yaxis.set_major_locator(ticker.MaxNLocator(nbins=6)) 
 plt.gca().xaxis.set_major_locator(ticker.MaxNLocator(nbins=10)) 
@@ -672,28 +647,8 @@ for value in unique_values_combined:
                          color=color_dict[value],
                          s=10,
                          label=r'$|\mathcal{I}_e|=$'f'{value}')
-    #new = plt.scatter([N_aircraft[i] for i, match in enumerate(mask_combined) if match], 
-    #                     [Kg_frac_b[i] for i, match in enumerate(mask_combined) if match], 
-    #                     color=color_dict[value],
-    #                     s=3,
-    #                     label=r'$|\mathcal{I}_e|=$'f'{value}')
     handles.append(handle)
     labels.append(r'$|\mathcal{I}_e|=$'f'{value}')
-'''
-    X = np.array(np.sort([N_aircraft[i] for i, match in enumerate(mask_combined) if match])).reshape(-1, 1)
-    y = np.array(np.sort([Kg_frac[i] for i, match in enumerate(mask_combined) if match])[::-1])
-    np.delete(X, 0, axis=0)
-    np.delete(y, 0, axis=0)
-    poly = PolynomialFeatures(degree=2)  # You can change the degree of the polynomial
-    X_poly = poly.fit_transform(X)    
-    model = Ridge(alpha=2000)  # Ridge regression with regularization
-    #model = LinearRegression()
-    model.fit(X_poly, y)
-    x_values = np.linspace(min(N_aircraft), max(N_aircraft), 100)
-    x_values_poly = poly.fit_transform(x_values.reshape(-1, 1))
-    y_values = model.predict(x_values_poly)
-    plt.plot(x_values, y_values, color=color_dict[value], linestyle='-', linewidth=1) 
-'''
 
 ax.set_xlabel( r'Amount of aircraft $|\mathcal{I}_a|$',fontsize=10)
 ax.set_ylabel(r'Fuel savings [\%]',fontsize=10)
@@ -739,7 +694,7 @@ ax.legend(loc='upper right',fontsize=10)
 ax.set_xlabel('Aircraft category',fontsize=10)
 ax.set_ylabel( r'$|\mathcal{I}_a|$',fontsize=10)
 plt.gca().yaxis.set_major_locator(ticker.MaxNLocator(nbins=6)) 
-plt.grid(axis='y', linestyle='--', alpha=0.7)  # Add grid lines for better readability
+plt.grid(axis='y', linestyle='--', alpha=0.7)  
 plt.tight_layout()
 plt.show()
 
@@ -751,12 +706,12 @@ arr_appearance_hours = [appearance_hours[i] for i in range(len(appearance_hours)
 dep_appearance_hours = [appearance_hours[i] for i in range(len(appearance_hours)) if dep[i] != 0]
 
 # Count occurrences per hour
-hourly_counts_arr = [0] * 24  # Initialize a list to store counts for each hour
+hourly_counts_arr = [0] * 24  
 for hour in arr_appearance_hours:
     if hour < 24:
         hourly_counts_arr[int(hour)] += 1
         
-hourly_counts_dep = [0] * 24  # Initialize a list to store counts for each hour
+hourly_counts_dep = [0] * 24  
 for hour in dep_appearance_hours:
     if hour < 24:
         hourly_counts_dep[int(hour)] += 1
@@ -771,8 +726,8 @@ plt.xlabel('Hour of the day',fontsize=10)
 plt.ylabel(r'$|\mathcal{I}_a|$',fontsize=10)
 plt.yticks(fontsize=10)
 plt.gca().yaxis.set_major_locator(ticker.MaxNLocator(nbins=10)) 
-plt.xticks(hours,rotation=45,fontsize=7)  # Set x-axis ticks to display all hours
-plt.grid(axis='y', linestyle='--', alpha=0.7)  # Add grid lines for better readability
+plt.xticks(hours,rotation=45,fontsize=7)  
+plt.grid(axis='y', linestyle='--', alpha=0.7) 
 plt.tight_layout()
 plt.show()
 
@@ -803,39 +758,39 @@ if plot_scheme == True:
         Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, E_e_return, t_min) 
  
 
-towed=[]   
-for a in range(N_aircraft[0]):
-    towed.append(sum(variable_values['X'][a][i] + sum(variable_values['O'][a][I_up[a][b]][i] for b in range(len(I_up[a]))) for i in range(ETVs_cat1[0]+ETVs_cat2[0])))
-
-cat_polder =[]
-cat_polder_tot=[]
-cat_list =  []
-cat_tow_list =[]
-for i in range(N_aircraft[0]):
-    cat_list.append(cat[i]+1)
-    if towed[i] >0:
-        cat_tow_list.append(cat[i]+1)
-        if P[i][0] == 3:
-            cat_polder.append(cat[i]+1)
-    if P[i][0] == 3:
-        cat_polder_tot.append(cat[i]+1)
- 
-cat_dict = {}
-
-cat_dict['total'] = {i: f'{cat_list.count(i)}' for i in [3, 4, 6, 7, 8, 9]}
-cat_dict['towed'] = {i: f'{cat_tow_list.count(i)}' for i in [3, 4, 6, 7, 8, 9]}
-cat_dict['per'] = {i: f'{cat_tow_list.count(i) / cat_list.count(i)*100}' for i in [3, 4, 6, 7, 8, 9]}
-
-cat_dict_polder = {}
-
-cat_dict_polder['total'] = {i: f'{cat_polder_tot.count(i)}' for i in [3, 4, 6, 7, 8, 9]}
-cat_dict_polder['towed'] = {i: f'{cat_polder.count(i)}' for i in [3, 4, 6, 7, 8, 9]}
-cat_dict_polder['per'] = {i: f'{cat_polder.count(i) / cat_polder_tot.count(i)*100}' for i in [3, 4, 7, 8, 9]}
+        towed=[]   
+        for a in range(N_aircraft[0]):
+            towed.append(sum(variable_values['X'][a][i] + sum(variable_values['O'][a][I_up[a][b]][i] for b in range(len(I_up[a]))) for i in range(ETVs_cat1[0]+ETVs_cat2[0])))
+        
+        cat_polder =[]
+        cat_polder_tot=[]
+        cat_list =  []
+        cat_tow_list =[]
+        for i in range(N_aircraft[0]):
+            cat_list.append(cat[i]+1)
+            if towed[i] >0:
+                cat_tow_list.append(cat[i]+1)
+                if P[i][0] == 3:
+                    cat_polder.append(cat[i]+1)
+            if P[i][0] == 3:
+                cat_polder_tot.append(cat[i]+1)
+          
+        cat_dict = {}
+        
+        cat_dict['total'] = {i: f'{cat_list.count(i)}' for i in [3, 4, 6, 7, 8, 9]}
+        cat_dict['towed'] = {i: f'{cat_tow_list.count(i)}' for i in [3, 4, 6, 7, 8, 9]}
+        cat_dict['per'] = {i: f'{cat_tow_list.count(i) / cat_list.count(i)*100}' for i in [3, 4, 6, 7, 8, 9]}
+        
+        cat_dict_polder = {}
+        
+        cat_dict_polder['total'] = {i: f'{cat_polder_tot.count(i)}' for i in [3, 4, 6, 7, 8, 9]}
+        cat_dict_polder['towed'] = {i: f'{cat_polder.count(i)}' for i in [3, 4, 6, 7, 8, 9]}
+        cat_dict_polder['per'] = {i: f'{cat_polder.count(i) / cat_polder_tot.count(i)*100}' for i in [3, 4, 7, 8, 9]}
 
 
 #################################################################
 #Info
-folder_name = "2024-03-22_10-35-15"
-Load_new_file(folder_name)
+#folder_name = "2024-04-11_12-08-32"
+#Load_new_file(folder_name)
             
             

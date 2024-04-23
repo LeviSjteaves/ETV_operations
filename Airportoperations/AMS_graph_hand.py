@@ -308,7 +308,7 @@ img = plt.imread("EHAM_chart.png")  # Replace with the actual path to your scree
 #ax.imshow(img, extent=[108520, 115950, 477050, 486950], alpha=0.8)  # Adjust the extent based on your graph size
 
 # Add nodes on top of the image
-nx.draw(airport_graph, pos=node_positions, with_labels=True, node_color='black', node_size=15, font_size=10, ax=ax)
+nx.draw(airport_graph, pos=node_positions, with_labels=False, node_color='black', node_size=15, font_size=10, ax=ax)
 nx.draw(G_e_undirected, pos=node_positions_e, with_labels=False, node_color='grey', node_size=15, font_size=8, ax=ax, edge_color='grey', style='dashed', width=1.5)
    
 # Draw corresponding nodes in blue
@@ -317,7 +317,7 @@ nx.draw_networkx_nodes(airport_graph, pos=node_positions, nodelist=corresponding
 nx.draw_networkx_nodes(airport_graph_e, pos=node_positions_e, nodelist=corresponding_nodes, node_color='#1f77b4', node_size=15, ax=ax)
 
 ax.set_aspect('equal')
-ax.set_title('Schiphol airport (AMS)')
+#ax.set_title('Schiphol airport (AMS)')
 # Show the plot
 plt.show()
 

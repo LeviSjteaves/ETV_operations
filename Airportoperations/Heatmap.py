@@ -61,8 +61,6 @@ def Load_new_file(folder_name):
             loaded_dict = np.load(os.path.join(folder_name, file), allow_pickle=True).item()  # Load the dictionary
             iterations.append(loaded_dict)  # Append the loaded dictionary to the list
     # Define global variables
-    # Clear previous data
-
     Runtime = [iteration['Runtime'] for iteration in iterations] 
     taxi_delay = [iteration['Taxi_delay'] for iteration in iterations]
     total_delay = [iteration['Total_delay'] for iteration in iterations]

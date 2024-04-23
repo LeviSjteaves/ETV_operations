@@ -17,6 +17,7 @@ import matplotlib.patches as mpatches
 from collections import defaultdict
 from matplotlib.colors import ListedColormap
 import matplotlib.colors as mcolors
+from matplotlib.markers import MarkerStyle
 
 #from Functions_basicprob import appeartimes
 from datetime import datetime
@@ -77,9 +78,6 @@ def Load_Graph(airport):
         ax.set_title('Schiphol airport (AMS)')
         # Show the plot
         plt.show()
-        
-        
-
         
     elif airport == 'basic':
         # Airport info
@@ -166,12 +164,10 @@ def Load_Aircraft_Info(date_of_interest, pagelimit):
     flightdata = []
     for flight in rawflightdata:
         main_flight = flight['aircraftRegistration']
-        if main_flight not in seen_main_flights and flight['cdmFlightState'] != 'CNX' and flight['aircraftType']['aircraftCategory']>2 and (flight['actualOffBlockTime'] is not None or flight['actualLandingTime'] is not None):
+        if main_flight not in seen_main_flights and flight['cdmFlightState'] != 'CNX' and flight['aircraftType']['aircraftCategory']>2:
             #seen_main_flights.add(main_flight)
             flightdata.append(flight)
             
-    #flightdata = sorted(flightdata, key=lambda x: x['actualOffBlockTime'])
-    
     appear_times_T = []
     dep = []
     cat = []
@@ -212,8 +208,7 @@ def Load_Aircraft_Info(date_of_interest, pagelimit):
     
     sorted_lists = zip(*sorted(zip(appear_times, Flight_orig, Flight_dest, dep, cat)))
     appear_times, Flight_orig, Flight_dest, dep, cat = map(list, sorted_lists)
-            
-            
+                  
     np.save('Flight_O.npy', Flight_orig)
     np.save('Flight_D.npy', Flight_dest)
     np.save('Flight_t.npy', appear_times)
@@ -444,11 +439,12 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
     
     print("Adding sequencing constraints....")        
     #Ordering of tasks
-    # Addition for min towing vehicles##############
+    # Constraint addition when minimizing towing vehicles
+    ############
     #for a in range(N_aircraft):
         #if cat[a] <8:
             #model.addConstr(grp.quicksum(X[a,i] + grp.quicksum(O[a,I_up[a][l],i] for l in range(len(I_up[a]))) for i in range(N_etvs)) == 1)
-        ##################
+    ############
     for i in range(N_etvs):
         model.addConstr(grp.quicksum(X[a,i] for a in range(N_aircraft)) <= 1)
         for a in range(N_aircraft):
@@ -486,13 +482,13 @@ def Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat):
                 model.addConstr((O[a,I_up[a][b],i] == 1) >> (E[i, a] >= (E_a_dis[a]+Short_path_dist(G_e, D_a[a], O_a[I_up[a][b]])*(E_e))+0.2*bat_e[i]))
 
     model.update()
-    return model, I_up, I_do, E_a_dis, E_e_return, t_min
+    return model, I_up, I_do, E_a_dis, E_e_return, t_min, t_max
 
 def Short_path_dist(G, n1, n2):
     dist = nx.shortest_path_length(G, source=n1, target=n2, weight='weight')
     return dist
 
-def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, E_e_return, t_min):
+def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, E_e_return, t_min, t_max):
     # unpack P
     N_aircraft = p['N_aircraft']
     N_etvs = p['N_etvs']
@@ -517,16 +513,18 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
             etv_color.append('grey')
             etv_number.append(N_etvs)   
                
-    # Create a figure and axis
+    # Create figure and axis
     fig, ax = plt.subplots()
     ax.grid(True, which='both', linestyle='--', linewidth=0.5, color='gray')
     durations = []
+    
     # Iterate through aircraft and tasks to plot horizontal bars
     for a in range(N_aircraft): 
             start_time = variable_values['t'][a][0]
+            #duration = t_max[a][-1] - start_time #maximum bar length
             duration = variable_values['t'][a][len(P[a])-1] - start_time
             ax.barh(a, duration, left=start_time, color=etv_color[a])
-            ax.plot(appear_times[a], a, 'go', markersize=7)
+            ax.plot(appear_times[a], a, 'go', markersize=6)
             ax.plot((t_min[a][-1]+t_pushback*dep[a]), a, 'ro', markersize=7)
             durations.append(duration)
             for n in range(len(variable_values['t'][a])):
@@ -534,20 +532,21 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
                 ax.text(variable_values['t'][a][n], a, str(node_number), color='black',
                     ha='center', va='center', fontweight='bold', fontsize= 7)
                 if n >= 1:
-                    ax.plot(variable_values['t'][a][n], a-1+(Short_path_dist(G_a, P[a][n-1], P[a][n])/(variable_values['t'][a][n]-variable_values['t'][a][n-1]))/max_speed_a, 'go', markersize=5)
+                    ax.plot(variable_values['t'][a][n], a-1+(Short_path_dist(G_a, P[a][n-1], P[a][n])/(variable_values['t'][a][n]-variable_values['t'][a][n-1]))/max_speed_a, marker= MarkerStyle(1), color='k', markersize=5)
     appear_times_min = []
     
     for i in range(len(appear_times)):
         appear_times_min.append(int(appear_times[i]))
 
-    # Set a reasonable number of tick locations based on the range of total minutes
-    tick_locations = np.linspace(min(appear_times_min), max(appear_times_min)+max(durations)+start_delay,50)
+    # Set a tick locations 
+    tick_locations = np.linspace(min(appear_times_min), max(appear_times_min)+max(durations)+start_delay,20)
     hours, remainder = (divmod(tick_locations, 60))
     timestamps = [f'{int(h):02d}:{int(r):02d}' for h, r in zip(hours, remainder)]
     
     # Set labels and title
     ax.set_xlabel('Time [h]')
-    plt.xticks(tick_locations, timestamps, rotation=45, ha='right')
+    #plt.xticks(tick_locations, timestamps, rotation=45, ha='right')
+    plt.xticks(tick_locations[::3], timestamps[::3], rotation=45, ha='right')
     ax.set_ylabel('Aircraft Task')
     ax.set_yticks(range(N_aircraft))
     ax.set_yticklabels([f'Aircraft {i+1} Cat.{cat[i]}' for i in range(N_aircraft)])
@@ -558,10 +557,12 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
             patch.append(mpatches.Patch(color=colors[i], label=f'ETV {i+1} normal class'))
         else:
             patch.append(mpatches.Patch(color=colors[i], label=f'ETV {i+1} heavy class'))
-    patch.append(mpatches.Patch(color='grey', label='Aircraft not towed'))
     patch.append(mpatches.Patch(color='Green', label='Appear time'))
+    patch.append(mpatches.Patch(color='grey', label='Maximum taxi time'))
     patch.append(mpatches.Patch(color='Red', label='End time without delay'))
+    patch.append(mpatches.Patch(color='k', label='Velocity indicator'))
     ax.legend(handles=patch, loc='upper left')
+    plt.tight_layout()
     
     # Create a figure and axis
     fig, ax = plt.subplots(figsize=(18/2.54, 9/2.54))
@@ -603,6 +604,7 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
                         ax.barh(etv_number[a], width_drive2 , left=width_drive1+charge_time+variable_values['t'][a][len(P[a])-1], color='darkkhaki')
                         #ax.text(variable_values['t'][a][len(P[a])-1], etv_number[a], str('C'), color='green',
                             #ha='center', va='center', fontweight='bold', fontsize= 12)
+            #Add bars for aircraft that are not towed
             else:
                 start_time = variable_values['t'][a][0]
                 duration = variable_values['t'][a][len(P[a])-1] - start_time
@@ -641,7 +643,7 @@ def Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, 
     plt.minorticks_on()
 
 
-        #etv_SOC.append(G_SOC)
+    # Add SOC indicator bars and SOC value
     for i in range(N_etvs):
         for a in range(N_aircraft):
                 if variable_values['X'][a][i] == 1:

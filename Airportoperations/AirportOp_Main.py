@@ -6,19 +6,17 @@ Created on Fri Nov 17 11:17:48 2023
 """
 
 from gurobipy import GRB
-import networkx as nx
+from datetime import datetime
 from importlib import import_module
+import networkx as nx
 import sys
 import time
-from datetime import datetime
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-#model 1 for time-dep energycons. 
-#model 2 for dist-dep energycons.
-M = 1
-module = import_module(f'AirportOp_Func_{M}')
+# loading modules
+module = import_module('AirportOp_Func_1')
 Load_Aircraft_Info = module.Load_Aircraft_Info
 Create_model = module.Create_model
 Plotting = module.Plotting
@@ -28,14 +26,31 @@ Short_path_dist = module.Short_path_dist
 #close all open plots
 plt.close('all')
 
+##############################################################################
 #Choose from: basic:'basic', Eindhoven:'EHEH', Schiphol: 'EHAM'
 airport = 'EHAM'
+#Identify runway/gates in the network
+gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
+                    'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':108,'Y':108, '22':98, 'HG':98, '27':89}
+
 #Choose from: Manually insert flight info:'manual', use Schiphol flight API:'API', import saved document 'saved' 
 setting = 'API'
-APIsave = False # set true when only want to save raw-API data 
+#Settings for selecting API data
+date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
+pagelimit = [25,26]                #Specify the amount of pages of data [-1] for last page (each page = ~10 flights)
+APIsave = False                     #Set true when only want to save raw-API data 
+
 #If results should be saved in a folder
 save = True     
-    
+
+#Specify all the iterations (The optimisation runs for each of the compositions)
+iterations = []
+N_etvs_cat1_i = [0]   # Number of ETVs of category 1
+N_etvs_cat2_i = [2]   # Number of ETVs of category 2
+start_delay_i = [15]   # Allowed start delay
+##############################################################################
+
+#Load airport network G_a:taxiways G_e:serviceroads
 G_a, G_e = Load_Graph(airport)
 
 O_a = []
@@ -51,30 +66,21 @@ if setting == 'manual':
     appear_times = tO_a
    
 elif setting == 'API':
-    date_of_interest = '2023-11-01'     #Pick the date for which you want the API data
-    pagelimit = [55,120]         # 120         #Specify the amount of pages of data [-1] for last page
-    
     Flight_orig, Flight_dest, appear_times, dep, cat, flightdata, rawflightdata = Load_Aircraft_Info(date_of_interest, pagelimit)
-    
     tO_a = appear_times
-    gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
-                        'K':99, 'M':102, 'R':79, 'S':107,'18R':3, '18L':92, '18C':22, '24':108,'Y':108, '22':98, 'HG':98, '27':89}
     
     for i in range(len(Flight_orig)):
         O_a.append(gate_runway_locs.get(Flight_orig[i]))   # Origins
         D_a.append(gate_runway_locs.get(Flight_dest[i]))   # Destinations
     
+    #Checking if all occuring runways/gates are assigned to a node in the network (gate_runway_locs)
     if None in O_a or None in D_a:
         print('Check if all used runways are saved in gate_runway_locs')
         sys.exit()
         
-    N_aircraft = 200# Number of aircraft
-    #N_aircraft = len(O_a)# Number of aircraft
+    N_aircraft = len(O_a)# Number of aircraft
     
 elif setting == 'saved':
-    gate_runway_locs = {'A':80,'B':82, 'C':83, 'D':84, 'E':56, 'F':55, 'G':54, 'H':53, 'J':52, 'P':52,
-                        'K':99, 'M':102, 'R':79, 'S':107, '18R':3, '36L':3, '18L':92, '36R':92, '18C':17, '06':108, '24':108,'Y':108 , '22':98, 'HG':98, '27':89}
-    
     tO_a = np.load('Flight_t.npy')
     appear_times = tO_a
     Flight_orig = np.load('Flight_O.npy')
@@ -86,7 +92,6 @@ elif setting == 'saved':
         O_a.append(gate_runway_locs.get(Flight_orig[i]))   # Origins
         D_a.append(gate_runway_locs.get(Flight_dest[i]))   # Destinations
     
-    #N_aircraft = 15# Number of aircraft
     N_aircraft = len(O_a)# Number of aircraft
 else:
     print("Please specify the method to get flight info")   
@@ -94,12 +99,6 @@ else:
 #Abort when only the data needs to be saved
 if APIsave == True:
     sys.exit()
-
-#Specify all the iterations
-iterations = []
-N_etvs_cat1_i = [0]   # Number of ETVs of category 1
-N_etvs_cat2_i = [0]   # Number of ETVs of category 2
-start_delay_i = [0]  # Allowed start delay
 
 if save == True:
     # Create folder with date
@@ -122,7 +121,7 @@ for it1 in range(len(N_etvs_cat1_i)):
             m_a = [10000, 20000, 45000, 70000, 120000, 180000, 240000, 300000, 380000, 450000]        # Airplane mass in kg
             fuelmass = [2000, 4000, 10000, 26000, 42000, 65000, 100000, 130000, 250000, 280000]       # fuel mass in kg
             eta = 0.3                        # Turbine efficiency
-            dock = [119]                     # Node corresponding to charging dock east:143,polderbaan:110, 
+            dock = [119]                     # Node corresponding to charging dock mid:119, east:143, polderbaan:110, 
             bat_e1 = 576                     # battery capacity \MJoule
             bat_e2 = 864                     # battery capacity \MJoule
             eta_e = 0.9                     # Electrical motor efficieny
@@ -168,9 +167,9 @@ for it1 in range(len(N_etvs_cat1_i)):
             p = {}
             #pack p
             p['N_aircraft'] = N_aircraft
-            p['max_speed_a'] = max_speed_a      # Max aircraft velocity
+            p['max_speed_a'] = max_speed_a      
             p['min_speed_a'] = min_speed_a 
-            p['N_etvs'] = N_etvs                # Number of ETVs
+            p['N_etvs'] = N_etvs                
             p['N_etvs_cat1'] = N_etvs_cat1
             p['N_etvs_cat2'] = N_etvs_cat2
             p['max_speed_e'] = max_speed_e  
@@ -180,8 +179,8 @@ for it1 in range(len(N_etvs_cat1_i)):
             p['bat_e_min'] = bat_e_min 
             p['bat_e_max'] = bat_e_max
             p['g'] = g
-            p['mu'] = mu                        # Rolling resistance
-            p['m_a'] = m_a                      # Airplane mass
+            p['mu'] = mu                        
+            p['m_a'] = m_a                      
             p['eta'] = eta 
             p['eta_e'] = eta_e
             p['I_ch'] = I_ch 
@@ -207,6 +206,7 @@ for it1 in range(len(N_etvs_cat1_i)):
             P = []
             d_a = []
             
+            # specigy aircraft Paths
             for a in range(N_aircraft):
                 sp = nx.shortest_path(G_a, source=O_a[a], target=D_a[a], weight='weight')
                 d_a.append(nx.shortest_path_length(G_a, source=O_a[a], target=D_a[a], weight='weight'))
@@ -216,7 +216,7 @@ for it1 in range(len(N_etvs_cat1_i)):
             print("DATA EXTRACTED")
                             
             # Create the Gurobi model
-            model, I_up, I_do, E_a_dis, E_e_return, t_min = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat)
+            model, I_up, I_do, E_a_dis, E_e_return, t_min, t_max = Create_model(G_a, G_e, p, P, tO_a, O_a, D_a, d_a, dock, dep, cat)
 
             print("MODEL CREATED")
             # set optimization limits
@@ -288,10 +288,9 @@ for it1 in range(len(N_etvs_cat1_i)):
             
                     # Assign the variable value to the nested dictionary
                     current_dict[parts[-1]] = round(var.x,2)
-                
-                
-            Kg_kerosene = ((model.objVal-F_delay*sum((variable_values['t'][a][len(P[a])-1]-(t_min[a][len(P[a])-1])) for a in range(N_aircraft))))
             
+            # Result values
+            Kg_kerosene = ((model.objVal-F_delay*sum((variable_values['t'][a][len(P[a])-1]-(t_min[a][len(P[a])-1])) for a in range(N_aircraft))))
             Costs_etvs = int(1*10**6*N_etvs_cat1+1.5*10**6*N_etvs_cat2)
             
             total_delay=[]
@@ -344,5 +343,5 @@ for a in range(N_aircraft):
                 print(f"{'O'}_{a}_{I_up[a][b]}_{i}")
              
     
-Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, E_e_return, t_min)  
+Plotting(variable_values, P, I_up, p, appear_times, G_a, cat, dep, E_a_dis, E_e_return, t_min, t_max)  
    

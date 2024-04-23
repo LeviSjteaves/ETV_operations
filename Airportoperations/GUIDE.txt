@@ -1,0 +1,17 @@
+This file contains a short guide on how to use the code.
+
+AirportOp_Main.py is the main file which contains of 4 parts:
+- Creating the airport graph.
+- Download API flight-data from the schiphol developper website. Downloaded data will be saved as: Flight_D/dep/info/O/t.
+When loading saved data, the files Flight_D/dep/info/O/t should be accessible
+- Creating the model with the given parameters.
+- Optimise and save the results. Results are saved in a '2024-03-04_09-41-05' file. 
+2024_sims_INFO.txt contains information about the optimisation settings of previous results.
+
+AirportOp_Func_1.py contains the fucntions used in AirportOp_Main.
+
+AMS_graph_hand.py contains the Network layout of Schiphol created by hand. 
+
+Plot_results.py can be used to visualize new results. the paths to the desired results are specified in this script for each plot separately.
+
+Heatmap.py is the script creating the heatmap of schiphol.
